@@ -79,6 +79,10 @@ node --check tools/eraser-tool-restore-source.js
 node --check tools/inject-eraser-tool-restore.cjs
 node --check tools/patch-eraser-tool-restore.cjs
 node --check tools/verify-eraser-tool-restore.cjs
+node --check tools/patch-pen-size.cjs
+node --check tools/patch-lasso-resize.cjs
+node --check tools/verify-pen-size.cjs
+node --check tools/verify-lasso-resize.cjs
 node tools/verify-handwriting-raster.cjs
 node tools/verify-handwriting-resize.cjs
 node tools/verify-handwriting-render-quality.cjs
@@ -92,6 +96,8 @@ node tools/verify-settled-svg-presentation.cjs
 node tools/verify-handwriting-zoom.cjs
 node tools/verify-portable-snapshot.cjs
 node tools/verify-eraser-tool-restore.cjs
+node tools/verify-pen-size.cjs
+node tools/verify-lasso-resize.cjs
 ```
 
 For the rendering investigation, install the three distributable files, enable **Developer diagnostics**, reload the plugin, and run **Diagnostics: compare handwriting rendering**. Check the synthetic fixture and the last-stroke replay at 100%, 125%, and 150%, then use **Copy report** for the measured canvas and compositing data.
