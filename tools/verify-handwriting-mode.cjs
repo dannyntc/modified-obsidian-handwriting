@@ -225,6 +225,7 @@ const openTip = fakeDocument.createElement();
 openTip.classList.add("handwriting-strip-tip", "is-showing");
 runtimeRoot.queryResults = [openSlider, openTip];
 const dispatches = [];
+const stableChromeHost = fakeDocument.createElement();
 const runtimeEditor = {
   view: {
     state: { facet: () => true },
@@ -236,11 +237,13 @@ const runtimeEditor = {
     closeInkSliders: () => { runtimeEditor.slidersClosed = true; },
     cancelTipTimer: () => { runtimeEditor.tipClosed = true; },
   },
+  chromeHost: () => stableChromeHost,
 };
 runtimeMode.attachEditor(runtimeEditor, runtimeRoot);
 assert.equal(contentDOM.getAttribute("inputmode"), "none", "handwriting mode suppresses the keyboard before focus can occur");
-const modeControl = runtimeRoot.children.find((child) => child.classList.contains("handwriting-mode-toggle"));
-assert.ok(modeControl, "the standalone icon fallback is created for the editor");
+const modeControl = stableChromeHost.children.find((child) => child.classList.contains("handwriting-mode-toggle"));
+assert.ok(modeControl, "the standalone icon fallback is created on the stable chrome host");
+assert.equal(modeControl.parentElement, stableChromeHost, "the standalone fallback is outside the zoomed editor");
 assert.equal(modeControl.children.length, 2, "the fallback contains only pen and keyboard icons");
 const toolbarHost = fakeDocument.createElement();
 const toolbarMoreRow = fakeDocument.createElement();
@@ -330,7 +333,7 @@ assert.equal(prevented, true, "handwriting mode prevents note focus");
 assert.equal(stopped, true, "handwriting mode stops focus propagation");
 assert.ok(blurCount > 1, "handwriting focus guard blurs the note editor");
 runtimeMode.attachToolbar(runtimeEditor, null);
-assert.equal(modeControl.parentElement, runtimeRoot, "detaching the toolbar returns the fallback mode control to the editor");
+assert.equal(modeControl.parentElement, stableChromeHost, "detaching the toolbar returns the fallback mode control to its stable host");
 assert.equal(toolbarHost.classList.contains("handwriting-mode-toolbar"), false, "the old toolbar loses the mode marker when detached");
 assert.equal(toolbar.rowOrder.includes(modeControl), false, "the fallback control is never added to toolbar measurement");
 assert.equal(modePenButton.classList.contains("handwriting-mode-option"), false, "detaching removes the mode marker from the old pen button");

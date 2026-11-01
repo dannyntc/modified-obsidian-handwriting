@@ -1178,7 +1178,7 @@ var HandwritingMode = (() => {
     if (!state) return;
     removeLegacyKeyboardButton(toolbar);
     const nextToolbar = findToolbarModeButtons(toolbar) ? toolbar : null;
-    if (state.toolbar === nextToolbar && (nextToolbar ? state.toolbarButtons?.size === 2 : state.control.parentElement === state.root)) {
+    if (state.toolbar === nextToolbar && (nextToolbar ? state.toolbarButtons?.size === 2 : state.control.parentElement === state.controlRoot)) {
       nextToolbar?.el?.classList.add("handwriting-mode-toolbar");
       state.refresh();
       nextToolbar?.layoutOverflow?.();
@@ -1199,7 +1199,7 @@ var HandwritingMode = (() => {
         button.classList.add("handwriting-mode-option", `handwriting-mode-${value}`);
       }
     } else {
-      state.root.appendChild(state.control);
+      state.controlRoot.appendChild(state.control);
     }
     state.refresh();
     previousToolbar?.layoutOverflow?.();
@@ -1250,8 +1250,9 @@ var HandwritingMode = (() => {
   function attachEditor(editor, root) {
     if (!root || editor.__handwritingModeDispose) return;
     syncKeyboardSuppression(editor);
-    const { control, buttons } = createControl(root);
-    const uiState = { control, buttons, toolbarButtons: new Map(), root, toolbar: null, refresh: null };
+    const controlRoot = (typeof editor.chromeHost === "function" ? editor.chromeHost() : null) ?? root.parentElement ?? root;
+    const { control, buttons } = createControl(controlRoot);
+    const uiState = { control, controlRoot, buttons, toolbarButtons: new Map(), root, toolbar: null, refresh: null };
     const textGuardsDispose = attachTextGuards(editor, root);
     const saved = guardMutations(editor);
     const refresh = () => applyVisualState(editor, root, control, buttons, uiState.toolbarButtons, uiState.toolbar);
