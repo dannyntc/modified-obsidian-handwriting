@@ -1,6 +1,17 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.8.7`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.8.8`.
+
+## 1.8.8 — 2026-11-01
+
+### Added
+
+- Added a global Handwriting / Typing mode control for Markdown notes. Handwriting is selected on plugin startup; Typing restores text editing while handwriting tools are disabled, and existing text and ink remain preserved.
+
+### Fixed
+
+- Handwriting mode now makes note editors non-editable and prevents finger taps from focusing the note or opening the keyboard. Typing mode hides the expanded toolbar, collapsed pen pill, popovers, tips, and note zoom controls.
+- Handwriting mode now applies `inputmode="none"` before touch focus can begin, eliminating the occasional transient keyboard flash while preserving the original input mode in Typing mode and during pane teardown.
 
 ## 1.8.7 — 2026-11-01
 

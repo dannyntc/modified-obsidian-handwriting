@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.8.7`.
+Version `1.8.8`.
 
 This release includes:
 
@@ -101,6 +101,12 @@ Completed SVG ink now uses the permanent note-local layer automatically. Compare
 The zoom report's `svg handoff` line measures the JavaScript time from SVG publication start to the completed presentation update. `completed ink` also reports `lastIncrementalMs`, `incrementalUpserts`, and `attributeWrites`; after a normal Pencil lift, the upsert count should increase by the number of newly completed strokes while existing paths remain cached.
 
 New strokes use the selected **Fountain pressure profile** under Handwriting settings. Existing handwriting keeps its saved renderer, including legacy Classic strokes; changing the pressure profile affects only new strokes.
+
+## Input modes
+
+Each Markdown note editor shows a **Handwriting / Typing** mode control. The mode is global across open notes: Handwriting starts selected whenever the plugin loads, and switching modes updates every open note and notes opened afterward.
+
+In Handwriting mode, note text input, paste, cut, drag-and-drop, and IME composition are blocked, and tapping the note does not focus the editor or open the keyboard. In Typing mode, normal Markdown editing is restored while the handwriting toolbar is hidden and handwriting commands are disabled. Existing text and handwriting remain visible and preserved in both modes.
 
 ## Repository contents
 

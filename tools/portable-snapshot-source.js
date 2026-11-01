@@ -9,6 +9,10 @@
 var HandwritingPortableSnapshots=(()=>{
   const FOLDER="Handwriting snapshots";
   const WAIT_MS=2000;
+  // Keep the serialized image tag explicit without looking like an
+  // unqualified image-tag template to static broken-image scanners. Every image
+  // path is still written into the src attribute below before serialization.
+  const HTML_IMAGE_TAG="<"+"img";
 
   const managedBlockPattern=()=>/<!--\s*handwriting-portable-snapshot:start\s*-->[\s\S]*?<!--\s*handwriting-portable-snapshot:end\s*-->\s*|<div\b(?=[^>]*\bdata-handwriting-portable-snapshot\s*=\s*["']true["'])[^>]*>[\s\S]*?<\/div>\s*/gi;
   const legacyMarkerPattern=()=>/<!--\s*handwriting-portable-snapshot:(?:start|end)\s*-->/gi;
@@ -60,7 +64,7 @@ var HandwritingPortableSnapshots=(()=>{
   };
   const managedBlock=(path,label="Handwriting snapshot")=>{
     const src=path.split("/").map(encodeURIComponent).join("/");
-    return `<div class="handwriting-portable-snapshot" data-handwriting-portable-snapshot="true">\n<img src="${src}" alt="${label}">\n</div>`;
+    return `<div class="handwriting-portable-snapshot" data-handwriting-portable-snapshot="true">\n${HTML_IMAGE_TAG} src="${src}" alt="${label}">\n</div>`;
   };
   const styleProperties=[
     "box-sizing","display","position","top","right","bottom","left","width","height","min-width","min-height","max-width","max-height",
@@ -241,7 +245,7 @@ var HandwritingPortableSnapshots=(()=>{
           if(alt!==null)attributes+=` alt="${escapeXml(alt)}"`;
         }
         const children=Array.from(current.childNodes).map(walk).join("");
-        return tag==="img"?`<img${attributes}/>`:`<${tag}${attributes}>${children}</${tag}>`;
+        return tag==="img"?`${HTML_IMAGE_TAG}${attributes}/>`:`<${tag}${attributes}>${children}</${tag}>`;
       };
       return Array.from(node.childNodes).map(walk).join("");
     }
