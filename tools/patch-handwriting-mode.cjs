@@ -126,9 +126,9 @@ replaceOnce(
   "note mode button toolbar integration",
 );
 replaceOnce(
-  "if(e&&this.mobileTools?.stale()&&(this.mobileTools.destroy(),this.mobileTools=null),e===(this.mobileTools!==null))return;",
   "if(e&&this.mobileTools?.stale()&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e===(this.mobileTools!==null))return;",
-  "mode control detach before toolbar rebuild",
+  "if(e&&this.mobileTools?.stale()&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e&&this.mobileTools&&!HandwritingMode.isNoteToolbarCompatible(this.mobileTools)&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e===(this.mobileTools!==null))return;",
+  "note toolbar compatibility rebuild",
 );
 replaceOnce(
   "if(!e){this.mobileTools?.destroy(),this.mobileTools=null;return}",
@@ -169,7 +169,7 @@ replaceOnce(
 new vm.Script(bundle, { filename: bundlePath });
 
 if (process.argv.includes("--check")) {
-  for (const text of ["HandwritingMode", "handwriting-mode-toggle", "handwriting-mode-typing", "transactionFilter"]) {
+  for (const text of ["HandwritingMode", "handwriting-mode-toggle", "handwriting-mode-typing", "transactionFilter", "removeLegacyKeyboardButton", "isNoteToolbarCompatible", "handwriting:pen-ink-toggle"]) {
     if (!bundle.includes(text)) throw new Error(`handwriting mode bundle is missing ${text}`);
   }
   console.log("PASS: handwriting mode bundle patch is valid");

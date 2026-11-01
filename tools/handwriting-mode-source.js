@@ -2,6 +2,7 @@
 var HandwritingMode = (() => {
   const HANDWRITING = "handwriting";
   const TYPING = "typing";
+  const LEGACY_KEYBOARD_COMMAND = "handwriting:pen-ink-toggle";
   const listeners = new Set();
   let current = HANDWRITING;
 
@@ -307,6 +308,35 @@ var HandwritingMode = (() => {
     return buttons.size === 2 ? buttons : null;
   }
 
+  function removeLegacyKeyboardButton(toolbar) {
+    const entries = Array.isArray(toolbar?.buttons) ? toolbar.buttons : [];
+    const legacyElements = new Set(
+      entries
+        .filter((entry) => entry?.spec?.commandId === LEGACY_KEYBOARD_COMMAND)
+        .map((entry) => entry.el)
+        .filter(Boolean),
+    );
+    if (legacyElements.size === 0) return;
+
+    for (const element of legacyElements) element.remove?.();
+    if (Array.isArray(toolbar.rowOrder)) {
+      for (let index = toolbar.rowOrder.length - 1; index >= 0; index -= 1) {
+        if (legacyElements.has(toolbar.rowOrder[index])) toolbar.rowOrder.splice(index, 1);
+      }
+    }
+    if (Array.isArray(toolbar.buttons)) {
+      for (let index = toolbar.buttons.length - 1; index >= 0; index -= 1) {
+        if (legacyElements.has(toolbar.buttons[index]?.el)) toolbar.buttons.splice(index, 1);
+      }
+    }
+    toolbar.built?.delete?.(LEGACY_KEYBOARD_COMMAND);
+  }
+
+  function isNoteToolbarCompatible(toolbar) {
+    removeLegacyKeyboardButton(toolbar);
+    return !!findToolbarModeButtons(toolbar);
+  }
+
   function clearToolbarModeButtons(toolbar, buttons) {
     if (!toolbar) return;
     toolbar.el?.classList.remove("handwriting-mode-toolbar");
@@ -319,6 +349,7 @@ var HandwritingMode = (() => {
   function attachToolbar(editor, toolbar) {
     const state = editor?.__handwritingModeUi;
     if (!state) return;
+    removeLegacyKeyboardButton(toolbar);
     const nextToolbar = findToolbarModeButtons(toolbar) ? toolbar : null;
     if (state.toolbar === nextToolbar && (nextToolbar ? state.toolbarButtons?.size === 2 : state.control.parentElement === state.root)) {
       nextToolbar?.el?.classList.add("handwriting-mode-toolbar");
@@ -452,6 +483,7 @@ var HandwritingMode = (() => {
     filterTransaction,
     attachEditor,
     attachToolbar,
+    isNoteToolbarCompatible,
     detachEditor,
   };
 })();

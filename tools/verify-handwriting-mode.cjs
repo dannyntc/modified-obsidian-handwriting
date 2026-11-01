@@ -41,6 +41,7 @@ assert.match(source, /focusin/);
 assert.match(source, /attachToolbar/);
 assert.match(source, /setIcon/);
 assert.match(source, /handwriting-mode-option/);
+assert.match(source, /isNoteToolbarCompatible/);
 assert.doesNotMatch(source, /button\.textContent = text/);
 assert.match(bundle, /handwriting:mode-handwriting/);
 assert.match(bundle, /handwriting:mode-typing/);
@@ -48,6 +49,9 @@ assert.match(bundle, /excludedCommands:new Set\(\[ai\]\)/);
 assert.match(bundle, /this\.excludedCommands\.has\(d\.commandId\)/);
 assert.match(bundle, /stale\(\)\{for\(let e of UC\)\{if\(this\.excludedCommands\.has\(e\.commandId\)\)/);
 assert.match(bundle, /commandId:ai/);
+assert.match(bundle, /removeLegacyKeyboardButton/);
+assert.match(bundle, /isNoteToolbarCompatible/);
+assert.match(bundle, /handwriting:pen-ink-toggle/);
 const rejectedTransaction = mode.filterTransaction({ docChanged: true, isUserEvent: (kind) => kind === "input" });
 assert.equal(Array.isArray(rejectedTransaction), true);
 assert.equal(rejectedTransaction.length, 0);
@@ -239,23 +243,54 @@ const modeControl = runtimeRoot.children.find((child) => child.classList.contain
 assert.ok(modeControl, "the standalone icon fallback is created for the editor");
 assert.equal(modeControl.children.length, 2, "the fallback contains only pen and keyboard icons");
 const toolbarHost = fakeDocument.createElement();
+const toolbarMoreRow = fakeDocument.createElement();
 const modePenButton = fakeDocument.createElement();
 const modeKeyboardButton = fakeDocument.createElement();
+const legacyKeyboardButton = fakeDocument.createElement();
+const legacyOverflowButton = fakeDocument.createElement();
+const deleteSelectionButton = fakeDocument.createElement();
+toolbarHost.appendChild(toolbarMoreRow);
+toolbarMoreRow.appendChild(legacyOverflowButton);
+toolbarHost.appendChild(legacyKeyboardButton);
+toolbarHost.appendChild(deleteSelectionButton);
 toolbarHost.appendChild(modePenButton);
 toolbarHost.appendChild(modeKeyboardButton);
 const toolbar = {
   el: toolbarHost,
+  moreRow: toolbarMoreRow,
   buttons: [
+    { el: legacyKeyboardButton, spec: { commandId: "handwriting:pen-ink-toggle" } },
+    { el: legacyOverflowButton, spec: { commandId: "handwriting:pen-ink-toggle" } },
+    { el: deleteSelectionButton, spec: { commandId: "handwriting:delete-selected-ink" } },
     { el: modePenButton, spec: { commandId: "handwriting:mode-handwriting" } },
     { el: modeKeyboardButton, spec: { commandId: "handwriting:mode-typing" } },
   ],
-  rowOrder: [modePenButton, modeKeyboardButton],
+  rowOrder: [legacyKeyboardButton, deleteSelectionButton, legacyOverflowButton, modePenButton, modeKeyboardButton],
+  built: new Set(["handwriting:pen-ink-toggle", "handwriting:delete-selected-ink"]),
   layoutCalls: 0,
   refreshCalls: 0,
   layoutOverflow() { this.layoutCalls += 1; },
   refresh() { this.refreshCalls += 1; },
 };
+const incompleteToolbarHost = fakeDocument.createElement();
+const incompleteLegacyButton = fakeDocument.createElement();
+incompleteToolbarHost.appendChild(incompleteLegacyButton);
+const incompleteToolbar = {
+  el: incompleteToolbarHost,
+  buttons: [{ el: incompleteLegacyButton, spec: { commandId: "handwriting:pen-ink-toggle" } }],
+  rowOrder: [incompleteLegacyButton],
+  built: new Set(["handwriting:pen-ink-toggle"]),
+};
+assert.equal(runtimeMode.isNoteToolbarCompatible(incompleteToolbar), false, "a toolbar missing mode controls is incompatible");
+assert.equal(incompleteLegacyButton.parentElement, null, "compatibility checking removes a legacy keyboard button");
 runtimeMode.attachToolbar(runtimeEditor, toolbar);
+assert.equal(toolbarHost.children.includes(legacyKeyboardButton), false, "the legacy keyboard icon beside the bin is removed");
+assert.equal(toolbarMoreRow.children.includes(legacyOverflowButton), false, "the legacy keyboard icon is removed from the overflow row");
+assert.equal(toolbar.buttons.some(({ spec }) => spec.commandId === "handwriting:pen-ink-toggle"), false, "the legacy command is removed from toolbar measurement");
+assert.equal(toolbar.rowOrder.includes(legacyKeyboardButton), false, "the legacy command is removed from toolbar ordering");
+assert.equal(toolbar.rowOrder.includes(legacyOverflowButton), false, "the overflow legacy command is removed from toolbar ordering");
+assert.equal(toolbar.built.has("handwriting:pen-ink-toggle"), false, "the legacy command is removed from the built set");
+assert.equal(toolbarHost.children.includes(deleteSelectionButton), true, "the bin/delete button remains in the toolbar");
 assert.equal(toolbarHost.children.includes(modeControl), false, "the text mode control is not copied into the toolbar");
 assert.equal(modePenButton.classList.contains("handwriting-mode-option"), true, "the toolbar pen icon is marked as a mode control");
 assert.equal(modeKeyboardButton.classList.contains("handwriting-mode-option"), true, "the existing keyboard icon is marked as a mode control");
@@ -265,6 +300,8 @@ assert.equal(toolbar.rowOrder.includes(modeControl), false, "the fallback is not
 assert.equal(modePenButton.disabled, true, "the active handwriting icon is disabled");
 assert.equal(modeKeyboardButton.disabled, false, "the typing icon is enabled from handwriting mode");
 assert.ok(toolbar.layoutCalls > 0, "moving the mode control refreshes toolbar layout");
+runtimeMode.attachToolbar(runtimeEditor, toolbar);
+assert.equal(toolbar.buttons.filter(({ spec }) => spec.commandId === "handwriting:mode-typing").length, 1, "reattaching does not duplicate the keyboard mode icon");
 assert.equal(editableValues.length, 0, "CodeMirror editability is installed after the mount stack completes");
 pendingMicrotasks.shift()();
 assert.equal(editableValues.at(-1), false, "handwriting mode makes the note editor non-editable");
