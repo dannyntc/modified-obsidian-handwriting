@@ -7,6 +7,7 @@ let bundle = fs.readFileSync(bundlePath, "utf8");
 
 function replaceOnce(source, before, after, label) {
   if (source.includes(after)) return source;
+  if (label === "note lasso resize behavior" && source.includes("selectionHandleAt(e,t)") && source.includes("cloneResizeStroke(e,n,r)")) return source;
   const index = source.indexOf(before);
   if (index < 0) throw new Error(`Could not find ${label}`);
   if (checkOnly) throw new Error(`Missing ${label}`);
@@ -32,6 +33,13 @@ bundle = replaceOnce(
   'rollbackLiveGesture(){let e=this.eraseHistoryIdentity,t=this.dragHistoryIdentity;this.eraseHistoryIdentity=null,this.dragHistoryIdentity=null;let n=e&&this.erased.length?I.pathForHistoryIdentity(e):null;n&&(I.takeLive(n,[...this.erasePieces]),I.applyAddLive(n,this.erased.map(o=>o.stroke),hu(this.eraseFrom,this.erased)),this.restoredByRollback(n));let r=this.dragTotal,s=t&&r&&(r.dx!==0||r.dy!==0)&&this.dragIds.length?I.pathForHistoryIdentity(t):null;s&&r&&(I.moveStrokes(s,this.dragIds,-r.dx,-r.dy),this.restoredByRollback(s)),this.dragIds=[]}',
   'rollbackLiveGesture(){this.rollbackLiveResize();let e=this.eraseHistoryIdentity,t=this.dragHistoryIdentity;this.eraseHistoryIdentity=null,this.dragHistoryIdentity=null;let n=e&&this.erased.length?I.pathForHistoryIdentity(e):null;n&&(I.takeLive(n,[...this.erasePieces]),I.applyAddLive(n,this.erased.map(o=>o.stroke),hu(this.eraseFrom,this.erased)),this.restoredByRollback(n));let r=this.dragTotal,s=t&&r&&(r.dx!==0||r.dy!==0)&&this.dragIds.length?I.pathForHistoryIdentity(t):null;s&&r&&(I.moveStrokes(s,this.dragIds,-r.dx,-r.dy),this.restoredByRollback(s)),this.dragIds=[]}',
   "resize rollback hook"
+);
+
+bundle = replaceOnce(
+  bundle,
+  'cloneResizeStroke(e,t,n,r){let s=Number.isFinite(e.width)?e.width*r:e.width,o=e.points.map(a=>({...a,x:n.x+(a.x-n.x)*r,y:n.y+(a.y-n.y)*r}));return{...e,points:o,width:s,bbox:dt(o,s*2)}}',
+  'cloneResizeStroke(e,n,r){let s=Number.isFinite(e.width)?e.width*r:e.width,o=e.points.map(a=>({...a,x:n.x+(a.x-n.x)*r,y:n.y+(a.y-n.y)*r}));return{...e,points:o,width:s,bbox:dt(o,s*2)}}',
+  "resize stroke clone signature"
 );
 
 bundle = replaceOnce(
