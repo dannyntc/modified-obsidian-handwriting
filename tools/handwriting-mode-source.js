@@ -197,7 +197,7 @@ var HandwritingMode = (() => {
   }
 
   function isTextEditorTarget(root, target) {
-    return !!target && !target.closest?.(".handwriting-mode-toggle, .handwriting-mode-option") && (target === root || root.contains?.(target));
+    return !!target && !target.closest?.(".handwriting-mode-option") && (target === root || root.contains?.(target));
   }
 
   function shouldBlockKey(event) {
@@ -258,46 +258,6 @@ var HandwritingMode = (() => {
     };
   }
 
-  function setIcon(button, icon, fallback) {
-    try {
-      const setter = typeof Yt !== "undefined" ? Yt?.setIcon : null;
-      if (typeof setter === "function") {
-        setter(button, icon);
-        if (button.querySelector?.("svg")) return;
-      }
-    } catch {
-      // The standalone runtime and tests may not expose Obsidian's icon helper.
-    }
-    if (typeof button.setText === "function") button.setText(fallback);
-    else button.textContent = fallback;
-  }
-
-  function createControl(root) {
-    const doc = root.ownerDocument;
-    const control = doc.createElement("div");
-    control.className = "handwriting-mode-toggle";
-    control.dataset.ignoreSwipe = "true";
-    control.setAttribute("role", "group");
-    control.setAttribute("aria-label", "Note input mode");
-    const buttons = new Map();
-    for (const [value, icon, glyph, label] of [
-      [HANDWRITING, "pen", "P", "Use handwriting mode"],
-      [TYPING, "keyboard", "K", "Use typing mode"],
-    ]) {
-      const button = doc.createElement("button");
-      button.type = "button";
-      button.className = `handwriting-mobile-tool handwriting-mode-option handwriting-mode-${value}`;
-      button.setAttribute("aria-label", label);
-      button.setAttribute("title", label);
-      setIcon(button, icon, glyph);
-      button.addEventListener("click", () => set(value));
-      control.appendChild(button);
-      buttons.set(value, button);
-    }
-    root.appendChild(control);
-    return { control, buttons };
-  }
-
   function findToolbarModeButtons(toolbar) {
     const buttons = new Map();
     for (const entry of toolbar?.buttons ?? []) {
@@ -351,7 +311,7 @@ var HandwritingMode = (() => {
     if (!state) return;
     removeLegacyKeyboardButton(toolbar);
     const nextToolbar = findToolbarModeButtons(toolbar) ? toolbar : null;
-    if (state.toolbar === nextToolbar && (nextToolbar ? state.toolbarButtons?.size === 2 : state.control.parentElement === state.controlRoot)) {
+    if (state.toolbar === nextToolbar && state.toolbarButtons?.size === 2) {
       nextToolbar?.el?.classList.add("handwriting-mode-toolbar");
       state.refresh();
       nextToolbar?.layoutOverflow?.();
@@ -362,7 +322,6 @@ var HandwritingMode = (() => {
     const previousToolbar = state.toolbar;
     clearToolbarModeButtons(previousToolbar, state.toolbarButtons);
     state.toolbarButtons = new Map();
-    state.control.remove?.();
     state.toolbar = nextToolbar;
     if (nextToolbar) {
       state.toolbarButtons = findToolbarModeButtons(nextToolbar) ?? new Map();
@@ -371,8 +330,6 @@ var HandwritingMode = (() => {
       for (const [value, button] of state.toolbarButtons) {
         button.classList.add("handwriting-mode-option", `handwriting-mode-${value}`);
       }
-    } else {
-      state.controlRoot.appendChild(state.control);
     }
     state.refresh();
     previousToolbar?.layoutOverflow?.();
@@ -380,7 +337,7 @@ var HandwritingMode = (() => {
     nextToolbar?.refresh?.();
   }
 
-  function applyVisualState(editor, root, control, buttons, toolbarButtons, toolbar) {
+  function applyVisualState(editor, root, toolbarButtons, toolbar) {
     const typing = isTyping();
     syncKeyboardSuppression(editor);
     syncEditorEditable(editor);
@@ -389,7 +346,7 @@ var HandwritingMode = (() => {
     root.classList.toggle("handwriting-mode-host", true);
     root.classList.toggle("handwriting-mode-typing", typing);
     root.classList.toggle("handwriting-mode-handwriting", !typing);
-    for (const [value, button] of [...buttons, ...toolbarButtons]) {
+    for (const [value, button] of toolbarButtons) {
       const active = value === current;
       button.classList.toggle("is-current", active);
       button.classList.toggle("is-active", active);
@@ -397,7 +354,6 @@ var HandwritingMode = (() => {
       button.setAttribute("aria-pressed", String(active));
       button.setAttribute("aria-disabled", String(active));
     }
-    control.dataset.mode = current;
     syncDocument(root.ownerDocument);
     toolbar?.refresh?.();
   }
@@ -423,12 +379,10 @@ var HandwritingMode = (() => {
   function attachEditor(editor, root) {
     if (!root || editor.__handwritingModeDispose) return;
     syncKeyboardSuppression(editor);
-    const controlRoot = (typeof editor.chromeHost === "function" ? editor.chromeHost() : null) ?? root.parentElement ?? root;
-    const { control, buttons } = createControl(controlRoot);
-    const uiState = { control, controlRoot, buttons, toolbarButtons: new Map(), root, toolbar: null, refresh: null };
+    const uiState = { toolbarButtons: new Map(), root, toolbar: null, refresh: null };
     const textGuardsDispose = attachTextGuards(editor, root);
     const saved = guardMutations(editor);
-    const refresh = () => applyVisualState(editor, root, control, buttons, uiState.toolbarButtons, uiState.toolbar);
+    const refresh = () => applyVisualState(editor, root, uiState.toolbarButtons, uiState.toolbar);
     uiState.refresh = refresh;
     editor.__handwritingModeUi = uiState;
     editor.applyHandwritingToolbar = (toolbar) => attachToolbar(editor, toolbar);
@@ -444,7 +398,6 @@ var HandwritingMode = (() => {
       const toolbar = uiState.toolbar;
       clearToolbarModeButtons(toolbar, uiState.toolbarButtons);
       toolbar?.layoutOverflow?.();
-      control.remove();
       for (const [name, original] of Object.entries(saved)) editor[name] = original;
       delete editor.applyHandwritingMode;
       delete editor.applyHandwritingToolbar;

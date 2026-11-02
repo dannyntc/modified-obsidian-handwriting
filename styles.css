@@ -2100,52 +2100,10 @@ body [data-handwriting-paper]:not([data-handwriting-paper="dots"]):not([data-han
 	position: relative;
 }
 
-.handwriting-mode-toggle {
-	position: static;
-	display: inline-flex;
-	align-items: center;
-	flex: 0 0 auto;
-	gap: 2px;
-	pointer-events: auto;
-	padding: 0 4px 0 0;
-	margin-right: 2px;
-	border-right: 1px solid var(--background-modifier-border);
-	background: transparent;
-}
-
-/* The editor remains a safe fallback on desktop or when a mobile toolbar is
-   disabled. Mobile note toolbars use their own native icon buttons; this
-   compact group is only rendered when that toolbar is unavailable. */
-.handwriting-mode-toggle {
-	position: absolute;
-	top: 8px;
-	right: 10px;
-	z-index: 260;
-	padding: 3px;
-	margin-right: 0;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	background: var(--background-secondary);
-	box-shadow: var(--shadow-s, 0 2px 8px rgba(0, 0, 0, 0.15));
-}
-
+/* Mode buttons are native toolbar buttons. The modifier only adds the mode
+   state treatment; the toolbar owns their size, icon alignment, and surface. */
 .handwriting-mode-option {
-	width: 32px;
-	height: 32px;
-	min-width: 32px;
-	min-height: 32px;
-	padding: 0;
-	border: 1px solid transparent;
-	border-radius: 8px;
-	background: transparent;
-	color: var(--text-muted);
-	cursor: pointer;
-	font-size: 15px;
-	font-weight: 600;
-	line-height: 1.2;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	position: relative;
 }
 
 .handwriting-mode-option:hover:not(:disabled),
@@ -2207,13 +2165,8 @@ body.handwriting-mode-typing .handwriting-eraser-cursor {
 }
 
 @media (max-width: 560px) {
-	.handwriting-mode-toggle {
-		top: 6px;
-		right: 6px;
-	}
-
 	.handwriting-mode-option {
-		min-height: 32px;
+		min-width: 32px;
 	}
 }
 

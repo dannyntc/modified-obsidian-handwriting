@@ -49,6 +49,59 @@ function replaceOnceWithEmbeddedAfter(before, after, label) {
   bundle = bundle.replace(before, after);
 }
 
+function replaceOneOf(befores, after, label) {
+  if (bundle.includes(after)) return;
+  const matches = befores.filter((before) => bundle.includes(before));
+  if (matches.length !== 1) {
+    throw new Error(`${label}: expected one supported source match, found ${matches.length}`);
+  }
+  bundle = bundle.replace(matches[0], after);
+}
+
+function moveToolbarConstructorOptions() {
+  const anchor = "this.mobileTools=new xt(this.chromeHost(),";
+  const start = bundle.indexOf(anchor);
+  if (start < 0) throw new Error("toolbar constructor anchor is missing");
+  const objectStart = start + anchor.length;
+  if (bundle.startsWith("{exec:s=>", objectStart)) return;
+  if (bundle[objectStart] !== "{") {
+    throw new Error("toolbar constructor options object is missing");
+  }
+
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  let objectEnd = -1;
+  for (let index = objectStart; index < bundle.length; index += 1) {
+    const character = bundle[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+      continue;
+    }
+    if (character === "{") depth += 1;
+    else if (character === "}" && --depth === 0) {
+      objectEnd = index;
+      break;
+    }
+  }
+  if (objectEnd < 0) throw new Error("toolbar constructor options object is unbalanced");
+
+  const currentObject = bundle.slice(objectStart, objectEnd + 1);
+  const splitAt = currentObject.indexOf(",exec:s=>");
+  if (splitAt < 0) {
+    throw new Error("toolbar constructor does not contain the expected host callback boundary");
+  }
+  const modeOptions = `${currentObject.slice(0, splitAt)}}`;
+  const hostCallbacks = `{${currentObject.slice(splitAt + 1)}`;
+  bundle = `${bundle.slice(0, objectStart)}${hostCallbacks},${modeOptions}${bundle.slice(objectEnd + 1)}`;
+}
+
 replaceOnce(
   "function vk(){return[Qe.Prec.highest(at.EditorView.scrollHandler.of(ic)),PM,Hs,Iw()]}",
   "function vk(){return[Qe.Prec.highest(at.EditorView.scrollHandler.of(ic)),PM,Hs,Qe.EditorState.transactionFilter.of(HandwritingMode.filterTransaction),Iw()]}",
@@ -115,16 +168,29 @@ replaceOnce(
   "for(let d of[...ps,...n.additionalButtons??[]]){if(this.excludedCommands.has(d.commandId)||n.supportedCommands&&!n.supportedCommands.has(d.commandId)||!(d.shownOn?.(t)??!0))continue;",
   "toolbar excluded command filtering",
 );
+replaceOneOf([
+  "for(let E of this.rowOrder)this.buttons.some(A=>A.el===E)||(k+=E.offsetWidth+t);let P=this.buttons.map(({el:E,spec:A})=>({id:A.commandId,width:E.offsetWidth+t}));c=Jg",
+  "for(let E of this.rowOrder){let A=this.buttons.find(P=>P.el===E);A?.spec.pinned||(k+=E.offsetWidth+t)}let P=this.buttons.filter(({spec:E})=>!E.pinned).map(({el:E,spec:A})=>({id:A.commandId,width:E.offsetWidth+t}));c=Jg",
+],
+  "for(let E of this.rowOrder){let A=this.buttons.find(P=>P.el===E);(!A||A.spec.pinned)&&(k+=E.offsetWidth+t)}let P=this.buttons.filter(({spec:E})=>!E.pinned).map(({el:E,spec:A})=>({id:A.commandId,width:E.offsetWidth+t}));c=Jg",
+  "mode buttons stay outside overflow folding",
+);
 replaceOnce(
   "stale(){for(let e of UC)if((e.shownOn?.(this.host)??!0)!==this.built.has(e.commandId))return!0;return!1}",
   "stale(){for(let e of UC){if(this.excludedCommands.has(e.commandId))continue;if((e.shownOn?.(this.host)??!0)!==this.built.has(e.commandId))return!0}return!1}",
   "toolbar excluded command staleness",
 );
 replaceOnce(
-  "this.mobileTools=new xt(this.chromeHost(),{exec:s=>{if(s===\"editor:undo\")(0,Ze.undo)(this.view);",
-  "this.mobileTools=new xt(this.chromeHost(),{supportedCommands:new Set([...ps.map(s=>s.commandId).filter(s=>s!==ai),\"handwriting:mode-handwriting\",\"handwriting:mode-typing\"]),excludedCommands:new Set([ai]),additionalButtons:[{commandId:\"handwriting:mode-handwriting\",icon:\"pen\",glyph:\"P\",label:\"Handwriting mode\",startsGroup:!0,isActive:()=>HandwritingMode.isHandwriting(),isEnabled:()=>HandwritingMode.isTyping()},{commandId:\"handwriting:mode-typing\",icon:\"keyboard\",glyph:\"K\",label:\"Typing mode\",isActive:()=>HandwritingMode.isTyping(),isEnabled:()=>HandwritingMode.isHandwriting()}],exec:s=>{if(s===\"handwriting:mode-handwriting\"){HandwritingMode.set(HandwritingMode.HANDWRITING);return}if(s===\"handwriting:mode-typing\"){HandwritingMode.set(HandwritingMode.TYPING);return}if(s===\"editor:undo\")(0,Ze.undo)(this.view);",
-  "note mode button toolbar integration",
+  "startsGroup:!0,isActive:()=>HandwritingMode.isHandwriting()",
+  "startsGroup:!0,pinned:!0,isActive:()=>HandwritingMode.isHandwriting()",
+  "mode handwriting button pinned",
 );
+replaceOnce(
+  "label:\"Typing mode\",isActive:()=>HandwritingMode.isTyping()",
+  "label:\"Typing mode\",pinned:!0,isActive:()=>HandwritingMode.isTyping()",
+  "mode typing button pinned",
+);
+moveToolbarConstructorOptions();
 replaceOnce(
   "if(e&&this.mobileTools?.stale()&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e===(this.mobileTools!==null))return;",
   "if(e&&this.mobileTools?.stale()&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e&&this.mobileTools&&!HandwritingMode.isNoteToolbarCompatible(this.mobileTools)&&(HandwritingMode.attachToolbar(this,null),this.mobileTools.destroy(),this.mobileTools=null),e===(this.mobileTools!==null))return;",
@@ -169,7 +235,7 @@ replaceOnce(
 new vm.Script(bundle, { filename: bundlePath });
 
 if (process.argv.includes("--check")) {
-  for (const text of ["HandwritingMode", "handwriting-mode-toggle", "handwriting-mode-typing", "transactionFilter", "removeLegacyKeyboardButton", "isNoteToolbarCompatible", "handwriting:pen-ink-toggle"]) {
+  for (const text of ["HandwritingMode", "handwriting-mode-typing", "transactionFilter", "removeLegacyKeyboardButton", "isNoteToolbarCompatible", "handwriting:pen-ink-toggle", "pinned:!0"]) {
     if (!bundle.includes(text)) throw new Error(`handwriting mode bundle is missing ${text}`);
   }
   console.log("PASS: handwriting mode bundle patch is valid");
