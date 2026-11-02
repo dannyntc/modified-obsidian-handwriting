@@ -1400,6 +1400,75 @@ body [data-handwriting-paper]:not([data-handwriting-paper="dots"]):not([data-han
 	display: flex;
 }
 
+/* Contextual action shown only after a stationary tap inside a lasso
+   selection. It is separate from the normal strip controls so the Style
+   affordance cannot disappear into toolbar overflow or become a second
+   always-on toolbar button. */
+.handwriting-selection-overlay-root {
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	pointer-events: none;
+	contain: layout style;
+}
+
+.handwriting-selection-overlay-root .handwriting-selection-overlay-pop {
+	pointer-events: auto;
+	z-index: 1;
+}
+
+.handwriting-selection-action-pop {
+	display: none;
+	position: absolute;
+	z-index: 3;
+	top: 100%;
+	right: 4px;
+	margin-top: 4px;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 108px;
+	padding: 6px;
+	box-sizing: border-box;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: var(--shadow-s, 0 2px 8px rgba(0, 0, 0, 0.15));
+	touch-action: manipulation;
+}
+
+.handwriting-selection-action-pop.is-showing {
+	display: flex;
+}
+
+.handwriting-selection-action-pop button.handwriting-selection-action {
+	width: 100%;
+	height: auto;
+	min-height: 30px;
+	padding: 6px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-normal);
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.handwriting-selection-action-pop button.handwriting-selection-action:hover,
+.handwriting-selection-action-pop button.handwriting-selection-action:focus-visible {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+
+.handwriting-mobile-tools.handwriting-corner-bottom-right .handwriting-selection-action-pop,
+.handwriting-mobile-tools.handwriting-corner-bottom-left .handwriting-selection-action-pop,
+.handwriting-mobile-tools.handwriting-corner-bottom-center .handwriting-selection-action-pop {
+	top: auto;
+	bottom: 100%;
+	margin-top: 0;
+	margin-bottom: 4px;
+}
+
 /*
  * The size slider, LEFT THE WAY THE ENGINE DRAWS IT: horizontal.
  *
@@ -1595,6 +1664,53 @@ body [data-handwriting-paper]:not([data-handwriting-paper="dots"]):not([data-han
 	   slider button". Spent HERE rather than on the pop s gap so the readout
 	   and the swatch rows below keep the spacing he already approved. */
 	margin-bottom: 4px;
+}
+
+/* Pen/highlighter tabs inside the reused handwriting popovers. A mixed
+   lasso selection keeps the two tools independent; a single-tool selection
+   hides the unavailable tab instead of offering a control that would do
+   nothing. */
+.handwriting-selection-style-tabs {
+	display: none;
+	width: 100%;
+	gap: 4px;
+}
+
+.handwriting-selection-style-tabs.is-showing {
+	display: flex;
+}
+
+.handwriting-slider-pop button.handwriting-selection-style-tab {
+	flex: 1 1 0;
+	width: auto;
+	height: auto;
+	min-height: 28px;
+	padding: 5px 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.handwriting-slider-pop button.handwriting-selection-style-tab.is-current {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.handwriting-slider-pop button.handwriting-selection-style-tab.is-hidden {
+	display: none;
+}
+
+@media (pointer: coarse) {
+	.handwriting-selection-action-pop button.handwriting-selection-action,
+	.handwriting-slider-pop button.handwriting-selection-style-tab {
+		min-height: 40px;
+	}
 }
 
 .handwriting-mode-chip {
@@ -3315,6 +3431,19 @@ body.handwriting-boox .handwriting-mobile-tool.is-pressed:not(.is-disabled) {
 body.handwriting-installed .handwriting-portable-snapshot { display:none !important; }
 .handwriting-note-viewport-controls { position:absolute; top:52px; right:8px; z-index:30; display:flex; gap:2px; padding:3px; border:1px solid var(--background-modifier-border); border-radius:8px; background:var(--background-primary); box-shadow:0 2px 8px #0002; contain:layout paint; max-width:calc(100% - 16px); overflow:clip; will-change: transform, opacity; transition: opacity 60ms linear 160ms; }
 .handwriting-note-viewport-controls button { box-sizing:border-box; min-width:30px; height:30px; padding:0 6px; font-size:12px; }
+/* While selected handwriting is being styled, MobileTools measures the actual
+   toolbar and zoom-control rectangles and translates both into a vertical
+   stack. Top/middle placements put zoom above the strip; bottom placements put
+   it below, while the existing selection-pop rules open Style on the opposite
+   side. The class is also a stable hook for the measured transform state. */
+.handwriting-note-viewport-controls.is-selection-stack {
+	transition: transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 60ms linear 160ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	.handwriting-note-viewport-controls.is-selection-stack {
+		transition: none;
+	}
+}
 /* Below the pen strip and its folded pill on a phone, never over them. The fixed top above is sized for the
    desktop strip; a notched phone pushes the strip and pill down by its safe-area inset, and Android moves them
    below the notification shade (top 48 and 55 above), so there the bar sat over the pill and the strip's right

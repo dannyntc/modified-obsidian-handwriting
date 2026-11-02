@@ -19,6 +19,8 @@ This release includes:
 - Portable SVG snapshots stored in a comment-free managed HTML block, keeping handwritten notes readable when the plugin is disabled or removed.
 - Editable handwriting preserved in the plugin's `.handwriting` sidecar storage when the plugin is re-enabled.
 - After an erase gesture ends, the selected tool automatically returns to the pen or highlighter that was active before erasing.
+- After lassoing handwriting in a Markdown note, tap inside the selection, choose **Style**, then reuse the existing Pen/Highlighter options to edit selected ink colours and thickness. Pen thickness is constrained to 3–7 px; mixed selections keep pen and highlighter changes separate, and the complete style edit is undoable as one operation.
+- While selected ink is being styled, the zoom controls and Style popup are arranged in an adaptive vertical stack so they remain available without covering one another.
 - Live Apple Pencil fountain strokes now use incremental SVG presentation while the Pencil is down, keeping the active handwriting sharp without sacrificing the canvas fallback or frame-batched input path.
 - Active SVG handwriting now hides and restores the wet canvas and pen tile as one visibility transaction, preventing a visible style transition when the Pencil is lifted.
 
@@ -81,8 +83,13 @@ node --check tools/patch-eraser-tool-restore.cjs
 node --check tools/verify-eraser-tool-restore.cjs
 node --check tools/patch-pen-size.cjs
 node --check tools/patch-lasso-resize.cjs
+node --check tools/patch-selection-style.cjs
+node --check tools/patch-selection-layout.cjs
+node --check tools/patch-selection-overlay.cjs
+node --check tools/patch-whats-new.cjs
 node --check tools/verify-pen-size.cjs
 node --check tools/verify-lasso-resize.cjs
+node --check tools/verify-selection-style.cjs
 node tools/verify-handwriting-raster.cjs
 node tools/verify-handwriting-resize.cjs
 node tools/verify-handwriting-render-quality.cjs
@@ -98,6 +105,9 @@ node tools/verify-portable-snapshot.cjs
 node tools/verify-eraser-tool-restore.cjs
 node tools/verify-pen-size.cjs
 node tools/verify-lasso-resize.cjs
+node tools/verify-selection-style.cjs
+node tools/verify-selection-layout.cjs
+node tools/verify-whats-new.cjs
 ```
 
 For the rendering investigation, install the three distributable files, enable **Developer diagnostics**, reload the plugin, and run **Diagnostics: compare handwriting rendering**. Check the synthetic fixture and the last-stroke replay at 100%, 125%, and 150%, then use **Copy report** for the measured canvas and compositing data.
