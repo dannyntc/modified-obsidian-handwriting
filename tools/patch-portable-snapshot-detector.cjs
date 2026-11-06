@@ -4,6 +4,7 @@ const vm = require("node:vm");
 const bundlePath = "main.js";
 const sourcePath = "tools/portable-snapshot-source.js";
 const source = fs.readFileSync(sourcePath, "utf8").trim();
+const swipeSource = fs.readFileSync("tools/swipe-back-guard-source.js", "utf8").trim();
 let bundle = fs.readFileSync(bundlePath, "utf8");
 
 const sourceMarker = "var HandwritingPortableSnapshots=(()=>{";
@@ -16,7 +17,7 @@ const helperEnd = helperStart >= 0 ? bundle.indexOf("\n\nvar Ry=", helperStart) 
 if (helperStart < 0 || helperEnd < 0) throw new Error("portable snapshot helper boundaries not found");
 let helperPrefix = bundle.slice(0, helperStart);
 while (helperPrefix.endsWith(sourceHeader)) helperPrefix = helperPrefix.slice(0, -sourceHeader.length);
-bundle = `${helperPrefix}${sourceHeader}${sourceBody}${bundle.slice(helperEnd)}`;
+bundle = `${helperPrefix}${sourceHeader}${sourceBody}\n\n${swipeSource}${bundle.slice(helperEnd)}`;
 
 const matcherBefore = ",zI=/^ {0,3}<img\\b/i;function Ig";
 const matcherAfter = ",zI=new RegExp([\"^ {0,3}<\",\"img\",\"\\\\b\"].join(\"\"),\"i\");function Ig";
@@ -54,6 +55,16 @@ replaceOnce(
   'this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
   'this.addCommand({id:"handwriting-show-portable-snapshot-error",name:"Bug report: show portable snapshot error",callback:()=>{const report=this.portableSnapshots?.latestErrorText();report?new Xn(this.app,"Portable snapshot error",report).open():new S.Notice("Handwriting: no portable snapshot error recorded")}}),this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
   "portable snapshot error report command",
+);
+replaceOnce(
+  'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),document.body.classList.add("handwriting-installed"),',
+  'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),',
+  "mobile swipe-back guard installation",
+);
+replaceOnce(
+  'this.register(()=>{document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
+  'this.register(()=>{this.swipeBackGuard?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
+  "mobile swipe-back guard cleanup",
 );
 new vm.Script(bundle, { filename: bundlePath });
 

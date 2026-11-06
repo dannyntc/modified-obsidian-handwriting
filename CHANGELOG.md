@@ -1,6 +1,12 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.1`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.2`.
+
+## 1.9.2 — 2026-11-06
+
+### Fixed
+
+- Disabled the mobile two-finger backward navigation gesture that could show **Navigate back** and switch notes during pinch zoom. Pinch ownership now continues through staggered finger release and cancellation, while back buttons, commands, and forward navigation remain available.
 
 ## 1.9.1 — 2026-11-06
 
