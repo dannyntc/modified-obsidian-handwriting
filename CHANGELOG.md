@@ -1,6 +1,12 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.2`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.3`.
+
+## 1.9.3 — 2026-11-06
+
+### Changed
+
+- Added an idempotent patcher for removing the obsolete historical install note from the What’s New data.
 
 ## 1.9.2 — 2026-11-06
 
