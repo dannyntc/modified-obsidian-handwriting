@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.8.8`.
+Version `1.9.1`.
 
 This release includes:
 
@@ -18,6 +18,7 @@ This release includes:
 - SVG panning keeps the camera viewport and displayed crop separate, so handwriting retains its size while the note moves.
 - Portable SVG snapshots stored in a comment-free managed HTML block, keeping handwritten notes readable when the plugin is disabled or removed.
 - Portable snapshots refresh automatically when handwriting changes. Superseded snapshots and snapshots for erased handwriting are retained for 30 days; confirmed snapshots belonging to deleted notes are cleaned up automatically, including during retrospective startup reconciliation.
+- If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the failing stage, cleanup operation, affected file, and exception; it does not include note contents.
 - Editable handwriting preserved in the plugin's `.handwriting` sidecar storage when the plugin is re-enabled.
 - After an erase gesture ends, the selected tool automatically returns to the pen or highlighter that was active before erasing.
 - After lassoing handwriting in a Markdown note, tap inside the selection, choose **Style**, then reuse the existing Pen/Highlighter options to edit selected ink colours and thickness. Pen thickness is constrained to 3–7 px; mixed selections keep pen and highlighter changes separate, and the complete style edit is undoable as one operation.
@@ -79,6 +80,7 @@ node --check tools/verify-committed-svg-integration.cjs
 node --check tools/verify-handwriting-zoom.cjs
 node --check tools/verify-portable-snapshot.cjs
 node --check tools/verify-portable-snapshot-retention.cjs
+node --check tools/verify-portable-snapshot-diagnostics.cjs
 node --check tools/eraser-tool-restore-source.js
 node --check tools/inject-eraser-tool-restore.cjs
 node --check tools/patch-eraser-tool-restore.cjs
@@ -105,6 +107,7 @@ node tools/verify-settled-svg-presentation.cjs
 node tools/verify-handwriting-zoom.cjs
 node tools/verify-portable-snapshot.cjs
 node tools/verify-portable-snapshot-retention.cjs
+node tools/verify-portable-snapshot-diagnostics.cjs
 node tools/verify-eraser-tool-restore.cjs
 node tools/verify-pen-size.cjs
 node tools/verify-lasso-resize.cjs
@@ -114,6 +117,8 @@ node tools/verify-whats-new.cjs
 ```
 
 For the rendering investigation, install the three distributable files, enable **Developer diagnostics**, reload the plugin, and run **Diagnostics: compare handwriting rendering**. Check the synthetic fixture and the last-stroke replay at 100%, 125%, and 150%, then use **Copy report** for the measured canvas and compositing data.
+
+When a note shows the portable snapshot update notice on iPad, open the command palette and run **Bug report: show portable snapshot error**. Tap **Copy** in the report and share the text; it identifies whether loading, rendering, attachment creation, note update, or a specific cleanup operation failed without including the note body.
 
 Completed SVG ink now uses the permanent note-local layer automatically. Compare the same note at 100% and 150%, verify that it remains below sidebars and other UI, confirm that **Diagnostics: show zoom report** opens, and test Pencil lift, scrolling, pinch zoom, erasing, and lasso selection. If the note root cannot be mapped safely, the plugin hides SVG and restores Canvas rendering for that note session.
 

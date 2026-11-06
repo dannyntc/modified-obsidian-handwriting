@@ -50,7 +50,11 @@ replaceOnce(
   'this.registerEvent(this.app.vault.on("delete",m=>{m instanceof S.TFile&&m.extension==="md"&&this.portableSnapshots?.deleted(m.path),L(this.onFileDeleted(m),"preserve ink for a deleted note")}))',
   "portable snapshot note deletion hook",
 );
-
+replaceOnce(
+  'this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
+  'this.addCommand({id:"handwriting-show-portable-snapshot-error",name:"Bug report: show portable snapshot error",callback:()=>{const report=this.portableSnapshots?.latestErrorText();report?new Xn(this.app,"Portable snapshot error",report).open():new S.Notice("Handwriting: no portable snapshot error recorded")}}),this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
+  "portable snapshot error report command",
+);
 new vm.Script(bundle, { filename: bundlePath });
 
 if (process.argv.includes("--check")) {

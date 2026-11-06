@@ -22,6 +22,12 @@ var HandwritingPortableSnapshots=(()=>{
   const number=value=>Number.isFinite(value)?String(Math.round(value*100)/100):"0";
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   const nextFrame=win=>new Promise(resolve=>(win?.requestAnimationFrame??requestAnimationFrame)(()=>resolve()));
+  const diagnosticString=(value,limit=2000)=>{
+    let text;
+    try{text=String(value??"")}catch{text="(unavailable)"}
+    return text.replace(/\u0000/g,"?").slice(0,limit);
+  };
+  const diagnosticLine=(value,limit=600)=>diagnosticString(value,limit).replace(/[\r\n]+/g," ");
   const hash=value=>{
     let result=2166136261;
     for(let index=0;index<value.length;index++)result^=value.charCodeAt(index),result=Math.imul(result,16777619);
@@ -87,6 +93,7 @@ var HandwritingPortableSnapshots=(()=>{
       this.publishing=new Set;
       this.sequence=0;
       this.reconcileInFlight=null;
+      this.lastError=null;
     }
 
     destroy(){
@@ -114,7 +121,7 @@ var HandwritingPortableSnapshots=(()=>{
     deleted(path){
       const pageId=I.pageIdOf(path);
       const task=pageId?this.removeOrphanedPage(pageId):this.reconcile();
-      task.catch(error=>this.report(path,error));
+      task.catch(error=>this.report(path,error,{stage:"cleanup",reason:"delete"}));
       return task;
     }
 
@@ -144,7 +151,7 @@ var HandwritingPortableSnapshots=(()=>{
       let updated=0,failed=0;
       for(const file of files){
         if(this.stopped)break;
-        try{await I.ensureLoaded(file.path);if(I.inkPresence(file.path)!=="ink")continue;await this.run(file.path,"rebuild"),updated++}
+        try{if(await this.run(file.path,"rebuild"))updated++}
         catch(error){failed++,this.report(file.path,error)}
         await sleep(0);
       }
@@ -219,6 +226,18 @@ var HandwritingPortableSnapshots=(()=>{
 
     pageHasInk(path){return I.inkPresence(path)==="ink"}
 
+    annotateError(error,context){
+      if(error&&typeof error==="object"){
+        try{error.handwritingSnapshotContext={...(error.handwritingSnapshotContext||{}),...context}}catch{}
+      }
+      return error;
+    }
+
+    async cleanupOperation(operation,file,callback){
+      try{return await callback()}
+      catch(error){throw this.annotateError(error,{operation,file:file?.path||null})}
+    }
+
     assetTime(file){
       const mtime=Number(file?.stat?.mtime);
       if(Number.isFinite(mtime)&&mtime>0)return mtime;
@@ -251,15 +270,17 @@ var HandwritingPortableSnapshots=(()=>{
       }
     }
 
-    async removeFile(file){
-      if(typeof this.app.vault.trash==="function")return this.app.vault.trash(file,true);
-      if(typeof this.app.vault.delete==="function")return this.app.vault.delete(file);
-      throw new Error(`Vault cannot remove ${file.path}`);
+    async removeFile(file,operation="remove file"){
+      return this.cleanupOperation(operation,file,async()=>{
+        if(typeof this.app.vault.trash==="function")return this.app.vault.trash(file,true);
+        if(typeof this.app.vault.delete==="function")return this.app.vault.delete(file);
+        throw new Error(`Vault cannot remove ${file.path}`);
+      });
     }
 
     async clearDeleted(pageId){
       const file=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
-      if(file)await this.removeFile(file);
+      if(file)await this.removeFile(file,"clear deletion marker");
     }
 
     async cleanupPage(pageId,referenced,live){
@@ -267,18 +288,18 @@ var HandwritingPortableSnapshots=(()=>{
       const tombstone=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
       if(!live){
         const unreferenced=assets.filter(file=>!referenced.has(file.path));
-        for(const file of unreferenced)await this.removeFile(file);
-        if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone);
+        for(const file of unreferenced)await this.removeFile(file,"remove orphaned snapshot");
+        if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone,"remove orphaned deletion marker");
         return;
       }
-      const deletedAt=await this.readTombstone(pageId);
+      const deletedAt=await this.cleanupOperation("read deletion marker",tombstone,()=>this.readTombstone(pageId));
       const now=this.now();
       const deletionExpired=deletedAt!==null&&now-deletedAt>=RETENTION_MS;
       for(const file of assets){
         if(referenced.has(file.path))continue;
-        if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file);
+        if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file,"remove unreferenced snapshot");
       }
-      if(tombstone&&deletionExpired)await this.removeFile(tombstone);
+      if(tombstone&&deletionExpired)await this.removeFile(tombstone,"remove expired deletion marker");
     }
 
     async removeOrphanedPage(pageId){
@@ -323,22 +344,30 @@ var HandwritingPortableSnapshots=(()=>{
       const file=this.app.vault.getAbstractFileByPath(path);
       if(!(file instanceof S.TFile)||file.extension!=="md")return!1;
       this.running.set(path,reason);
+      let stage="load";
       try{
+        stage="load";
         await I.ensureLoaded(path);
         const pageId=this.pageIdFor(path);
         const existingAssets=this.snapshotFiles(pageId);
+        stage="read";
         const source=await this.app.vault.cachedRead(file);
         if(!this.pageHasInk(path)){
+          stage="cleanup";
           await this.removePublishedBlock(file);
           if(existingAssets.length>0)await this.markDeleted(pageId);
           return!1;
         }
         const generation=I.generation(path);
+        stage="render";
         const snapshot=await this.capture(file,source,generation);
         if(!snapshot)return!1;
         if(I.generation(path)!==generation){this.queue(path,"stale");return!1}
-        await this.publish(file,snapshot,generation);
+        await this.publish(file,snapshot,generation,next=>{stage=next});
         return!0;
+      }catch(error){
+        this.recordError(path,error,stage,reason);
+        throw error;
       }finally{
         this.running.delete(path);
         if(this.pending.delete(path))this.queue(path,"pending");
@@ -442,9 +471,10 @@ var HandwritingPortableSnapshots=(()=>{
       }
     }
 
-    async publish(file,snapshot,generation){
+    async publish(file,snapshot,generation,setStage=()=>{}){
       const pageId=this.pageIdFor(file.path);
       const folder=`${FOLDER}/${safePart(pageId)}`;
+      setStage("create");
       await this.ensureFolder(folder);
       const stamp=`${generation}-${Date.now()}-${++this.sequence}`;
       const assetPath=`${folder}/snapshot-${safePart(stamp)}.svg`;
@@ -453,12 +483,14 @@ var HandwritingPortableSnapshots=(()=>{
       const block=managedBlock(link);
       this.publishing.add(file.path);
       try{
+        setStage("update");
         await this.app.vault.process(file,current=>{
           return consolidateManagedBlock(current,block);
         });
       }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
+      setStage("cleanup");
       await this.clearDeleted(pageId);
-      const references=await this.referencedSnapshots();
+      const references=await this.cleanupOperation("scan snapshot references",null,()=>this.referencedSnapshots());
       if(references.reliable)await this.cleanupPage(pageId,references.paths,!0);
     }
 
@@ -487,7 +519,41 @@ var HandwritingPortableSnapshots=(()=>{
       }
     }
 
-    report(path,error){
+    recordError(path,error,stage="unknown",reason="unknown"){
+      if(this.lastError?.error===error&&this.lastError.path===path)return;
+      const context=error?.handwritingSnapshotContext||{};
+      const name=diagnosticLine(error?.name||"Error",120)||"Error";
+      const message=diagnosticLine(error?.message||error||"Unknown error",1200)||"Unknown error";
+      const stack=diagnosticString(error?.stack||"",4500);
+      const operation=diagnosticLine(context.operation||"",160);
+      const file=diagnosticLine(context.file||"",800);
+      this.lastError={error,path:diagnosticLine(path),stage:diagnosticLine(stage,80)||"unknown",reason:diagnosticLine(reason,80)||"unknown",operation,file,at:this.now(),name,message,stack};
+    }
+
+    latestErrorText(){
+      const error=this.lastError;
+      if(!error)return null;
+      let time="unknown";
+      try{time=new Date(error.at).toISOString()}catch{}
+      const lines=[
+        "Handwriting portable snapshot error",
+        `time: ${time}`,
+        `note: ${error.path}`,
+        `stage: ${error.stage}`,
+        `reason: ${error.reason}`,
+        ...(error.operation?[`operation: ${error.operation}`]:[]),
+        ...(error.file?[`file: ${error.file}`]:[]),
+        `error: ${error.name}: ${error.message}`,
+        "stack:",
+        error.stack||"(none)",
+      ];
+      return lines.join("\n");
+    }
+
+    report(path,error,details={}){
+      const stage=details.stage||"unknown";
+      const reason=details.reason||"unknown";
+      this.recordError(path,error,stage,reason);
       console.error("[handwriting] portable snapshot failed",path,error);
       new S.Notice(`Handwriting: portable snapshot could not be updated for ${path}`);
     }

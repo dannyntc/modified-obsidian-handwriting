@@ -1,13 +1,24 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.8.8`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.1`.
+
+## 1.9.1 — 2026-11-06
+
+### Added
+
+- Added an iPad-accessible portable snapshot error report that records the failing stage, trigger, cleanup operation, affected file, exception, and bounded stack without retaining note contents.
+
+## 1.9.0 — 2026-11-06
+
+### Added
+
+- Portable snapshot lifecycle cleanup: snapshots now refresh with handwriting edits, retain superseded or erased-note snapshots for 30 days, and remove confirmed orphaned snapshots for deleted notes during startup and periodic reconciliation.
 
 ## 1.8.8 — 2026-11-01
 
 ### Added
 
 - Added a global Handwriting / Typing mode control for Markdown notes. Handwriting is selected on plugin startup; Typing restores text editing while handwriting tools are disabled, and existing text and ink remain preserved.
-- Portable snapshot lifecycle cleanup: snapshots now refresh with handwriting edits, retain superseded or erased-note snapshots for 30 days, and remove confirmed orphaned snapshots for deleted notes during startup and periodic reconciliation.
 
 ### Fixed
 
