@@ -9,6 +9,8 @@
 var HandwritingPortableSnapshots=(()=>{
   const FOLDER="Handwriting snapshots";
   const WAIT_MS=2000;
+  const RETENTION_MS=30*24*60*60*1000;
+  const TOMBSTONE=".handwriting-snapshot-deleted.json";
   // Keep the serialized image tag explicit without looking like an
   // unqualified image-tag template to static broken-image scanners. Every image
   // path is still written into the src attribute below before serialization.
@@ -75,14 +77,16 @@ var HandwritingPortableSnapshots=(()=>{
   ];
 
   class PortableSnapshots{
-    constructor(app){
+    constructor(app,options={}){
       this.app=app;
+      this.now=typeof options.now==="function"?options.now:()=>Date.now();
       this.stopped=false;
       this.timers=new Map;
       this.running=new Map;
       this.pending=new Set;
       this.publishing=new Set;
       this.sequence=0;
+      this.reconcileInFlight=null;
     }
 
     destroy(){
@@ -105,6 +109,13 @@ var HandwritingPortableSnapshots=(()=>{
     async noteChanged(path){
       if(this.publishing.has(path))return;
       this.queue(path,"text");
+    }
+
+    deleted(path){
+      const pageId=I.pageIdOf(path);
+      const task=pageId?this.removeOrphanedPage(pageId):this.reconcile();
+      task.catch(error=>this.report(path,error));
+      return task;
     }
 
     renamed(path){
@@ -141,6 +152,172 @@ var HandwritingPortableSnapshots=(()=>{
       return{updated,failed};
     }
 
+    pageIdFor(path){return I.pageIdOf(path)||`path-${hash(path)}`}
+
+    pageFolder(pageId){return `${FOLDER}/${safePart(pageId)}`}
+
+    tombstonePath(pageId){return `${this.pageFolder(pageId)}/${TOMBSTONE}`}
+
+    isSnapshotPath(path){return /^Handwriting snapshots\/[^/]+\/snapshot-[A-Za-z0-9_-]+\.svg$/.test(path)}
+
+    snapshotFiles(pageId){
+      const prefix=`${this.pageFolder(pageId)}/`;
+      return (this.app.vault.getFiles?.()??[]).filter(file=>file.path.startsWith(prefix)&&this.isSnapshotPath(file.path));
+    }
+
+    pageIdsWithFiles(){
+      const ids=new Set;
+      for(const file of this.app.vault.getFiles?.()??[]){
+        const match=/^Handwriting snapshots\/([^/]+)\/(?:snapshot-[A-Za-z0-9_-]+\.svg|\.handwriting-snapshot-deleted\.json)$/.exec(file.path);
+        if(match)ids.add(match[1]);
+      }
+      return ids;
+    }
+
+    resolveVaultPath(from,target){
+      let value=String(target||"").replace(/^app:\/\/local\//,"").split(/[?#]/,1)[0];
+      try{value=decodeURIComponent(value)}catch{return null}
+      if(!value||/^[a-z]+:/i.test(value))return null;
+      const parts=value.startsWith("/")?value.slice(1).split("/"):[...from.split("/").slice(0,-1),...value.split("/")];
+      const resolved=[];
+      for(const part of parts){
+        if(!part||part===".")continue;
+        if(part===".."){resolved.pop();continue}
+        resolved.push(part);
+      }
+      return resolved.join("/");
+    }
+
+    async referencedSnapshots(){
+      const paths=new Set;
+      let reliable=true;
+      for(const file of this.app.vault.getMarkdownFiles?.()??[]){
+        let source;
+        try{source=await this.app.vault.cachedRead(file)}catch{reliable=false;continue}
+        for(const match of source.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)){
+          const resolved=this.resolveVaultPath(file.path,match[1]);
+          if(resolved&&this.isSnapshotPath(resolved))paths.add(resolved);
+        }
+      }
+      return{paths,reliable};
+    }
+
+    async livePages(){
+      const ids=new Set,ink=new Set,paths=new Map;
+      let reliable=true;
+      for(const file of this.app.vault.getMarkdownFiles?.()??[]){
+        try{await I.ensureLoaded(file.path)}catch{reliable=false;continue}
+        const pageId=I.pageIdOf(file.path);
+        if(!pageId)continue;
+        const safe=safePart(pageId);
+        ids.add(safe);
+        paths.set(safe,file.path);
+        if(this.pageHasInk(file.path))ink.add(safe);
+      }
+      return{ids,ink,paths,reliable};
+    }
+
+    pageHasInk(path){return I.inkPresence(path)==="ink"}
+
+    assetTime(file){
+      const mtime=Number(file?.stat?.mtime);
+      if(Number.isFinite(mtime)&&mtime>0)return mtime;
+      const parts=file.path.split("/").pop().slice(0,-4).split("-");
+      const parsed=Number(parts.at(-2));
+      return Number.isFinite(parsed)?parsed:this.now();
+    }
+
+    async readTombstone(pageId){
+      const file=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
+      if(!file)return null;
+      try{
+        const data=JSON.parse(await this.app.vault.cachedRead(file));
+        const deletedAt=Number(data?.deletedAt);
+        return Number.isFinite(deletedAt)&&deletedAt>=0?deletedAt:null;
+      }catch{return null}
+    }
+
+    async markDeleted(pageId){
+      const assets=this.snapshotFiles(pageId);
+      if(assets.length===0)return;
+      const path=this.tombstonePath(pageId);
+      const existing=this.app.vault.getAbstractFileByPath(path);
+      const deletedAt=await this.readTombstone(pageId)??this.now();
+      const content=JSON.stringify({version:1,pageId,safePageId:safePart(pageId),deletedAt});
+      if(existing)await this.app.vault.process(existing,()=>content);
+      else{
+        await this.ensureFolder(this.pageFolder(pageId));
+        await this.app.vault.create(path,content);
+      }
+    }
+
+    async removeFile(file){
+      if(typeof this.app.vault.trash==="function")return this.app.vault.trash(file,true);
+      if(typeof this.app.vault.delete==="function")return this.app.vault.delete(file);
+      throw new Error(`Vault cannot remove ${file.path}`);
+    }
+
+    async clearDeleted(pageId){
+      const file=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
+      if(file)await this.removeFile(file);
+    }
+
+    async cleanupPage(pageId,referenced,live){
+      const assets=this.snapshotFiles(pageId);
+      const tombstone=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
+      if(!live){
+        const unreferenced=assets.filter(file=>!referenced.has(file.path));
+        for(const file of unreferenced)await this.removeFile(file);
+        if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone);
+        return;
+      }
+      const deletedAt=await this.readTombstone(pageId);
+      const now=this.now();
+      const deletionExpired=deletedAt!==null&&now-deletedAt>=RETENTION_MS;
+      for(const file of assets){
+        if(referenced.has(file.path))continue;
+        if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file);
+      }
+      if(tombstone&&deletionExpired)await this.removeFile(tombstone);
+    }
+
+    async removeOrphanedPage(pageId){
+      const safe=safePart(pageId);
+      const live=await this.livePages();
+      if(!live.reliable||live.ids.has(safe))return!1;
+      const references=await this.referencedSnapshots();
+      if(!references.reliable)return!1;
+      await this.cleanupPage(safe,references.paths,!1);
+      return!0;
+    }
+
+    async reconcile(){
+      if(this.reconcileInFlight)return this.reconcileInFlight;
+      const task=(async()=>{
+        const live=await this.livePages();
+        if(!live.reliable)return!1;
+        const pages=new Set([...this.pageIdsWithFiles(),...live.ids]);
+        for(const pageId of pages){
+          if(live.ids.has(pageId)){
+            if(live.ink.has(pageId))await this.clearDeleted(pageId);
+            else{
+              const path=live.paths.get(pageId),file=path&&this.app.vault.getAbstractFileByPath(path);
+              if(file&&this.snapshotFiles(pageId).length>0)await this.removePublishedBlock(file);
+              await this.markDeleted(pageId);
+            }
+          }
+        }
+        const references=await this.referencedSnapshots();
+        if(!references.reliable)return!1;
+        for(const pageId of pages){
+          await this.cleanupPage(pageId,references.paths,live.ids.has(pageId));
+        }
+        return!0;
+      })();
+      this.reconcileInFlight=task.finally(()=>{this.reconcileInFlight=null});
+      return this.reconcileInFlight;
+    }
+
     async run(path,reason){
       if(this.stopped||this.running.has(path))return this.pending.add(path),!1;
       const file=this.app.vault.getAbstractFileByPath(path);
@@ -148,12 +325,15 @@ var HandwritingPortableSnapshots=(()=>{
       this.running.set(path,reason);
       try{
         await I.ensureLoaded(path);
-        if(I.inkPresence(path)!=="ink"){
+        const pageId=this.pageIdFor(path);
+        const existingAssets=this.snapshotFiles(pageId);
+        const source=await this.app.vault.cachedRead(file);
+        if(!this.pageHasInk(path)){
           await this.removePublishedBlock(file);
+          if(existingAssets.length>0)await this.markDeleted(pageId);
           return!1;
         }
         const generation=I.generation(path);
-        const source=await this.app.vault.cachedRead(file);
         const snapshot=await this.capture(file,source,generation);
         if(!snapshot)return!1;
         if(I.generation(path)!==generation){this.queue(path,"stale");return!1}
@@ -263,7 +443,7 @@ var HandwritingPortableSnapshots=(()=>{
     }
 
     async publish(file,snapshot,generation){
-      const pageId=I.pageIdOf(file.path)||`path-${hash(file.path)}`;
+      const pageId=this.pageIdFor(file.path);
       const folder=`${FOLDER}/${safePart(pageId)}`;
       await this.ensureFolder(folder);
       const stamp=`${generation}-${Date.now()}-${++this.sequence}`;
@@ -277,17 +457,23 @@ var HandwritingPortableSnapshots=(()=>{
           return consolidateManagedBlock(current,block);
         });
       }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
+      await this.clearDeleted(pageId);
+      const references=await this.referencedSnapshots();
+      if(references.reliable)await this.cleanupPage(pageId,references.paths,!0);
     }
 
     async removePublishedBlock(file){
       this.publishing.add(file.path);
       try{
+        let changed=!1;
         await this.app.vault.process(file,current=>{
           const matches=[...current.matchAll(managedBlockPattern())];
           if(matches.length===0&&!legacyMarkerPattern().test(current))return current;
+          changed=!0;
           const cleaned=withoutManagedBlock(current);
           return cleaned?`${cleaned}\n`:"";
         });
+        return changed;
       }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
     }
 

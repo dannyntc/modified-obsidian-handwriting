@@ -116,6 +116,9 @@ vm.runInNewContext(`${source}\nthis.PortableSnapshots=HandwritingPortableSnapsho
   await duplicateRemovalManager.removePublishedBlock(file);
   if (countManagedBlocks(duplicateRemoval.note) !== 0 || !duplicateRemoval.note.includes("Keep this text")) throw new Error("duplicate snapshot removal damaged note content");
   if (!bundle.includes("HandwritingPortableSnapshots")) throw new Error("manager is missing from main.js");
+  if (!bundle.includes("portableSnapshots?.reconcile()")) throw new Error("startup or periodic snapshot reconciliation is missing from main.js");
+  if (!bundle.includes("portableSnapshots?.deleted(m.path)")) throw new Error("note deletion snapshot cleanup hook is missing from main.js");
+  if (!bundle.includes(".handwriting-snapshot-deleted.json")) throw new Error("snapshot deletion retention marker is missing from main.js");
   if (bundle.includes("/^ {0,3}<img\\b/i")) throw new Error("the bundled Markdown image matcher still triggers the broken-image detector");
   if (bundle.includes("<img${attributes")) throw new Error("the snapshot image serializer still looks like a missing-src template");
   if (notices.length !== 0) throw new Error(`unexpected notices: ${notices.join(", ")}`);

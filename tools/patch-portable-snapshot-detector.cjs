@@ -28,6 +28,29 @@ if (bundle.includes(matcherAfter)) {
   bundle = bundle.replace(matcherBefore, matcherAfter);
 }
 
+const replaceOnce = (before, after, label) => {
+  if (bundle.includes(after)) return;
+  const count = bundle.split(before).length - 1;
+  if (count !== 1) throw new Error(`${label}: expected one match, found ${count}`);
+  bundle = bundle.replace(before, after);
+};
+
+replaceOnce(
+  'window.setTimeout(()=>{for(let m of this.app.workspace.getLeavesOfType("markdown")){let g=m.view?.file;g&&this.portableSnapshots?.queue(g.path,"startup")}},1500),',
+  'window.setTimeout(()=>{this.portableSnapshots?.reconcile().catch(error=>console.error("[handwriting] portable snapshot reconciliation failed",error));for(let m of this.app.workspace.getLeavesOfType("markdown")){let g=m.view?.file;g&&this.portableSnapshots?.queue(g.path,"startup")}},1500),',
+  "portable snapshot startup reconciliation",
+);
+replaceOnce(
+  'this.registerInterval(window.setInterval(()=>this.checkEinkHint(),1e4));',
+  'this.registerInterval(window.setInterval(()=>this.checkEinkHint(),1e4)),this.registerInterval(window.setInterval(()=>this.portableSnapshots?.reconcile().catch(error=>console.error("[handwriting] portable snapshot reconciliation failed",error)),6*60*60*1e3));',
+  "portable snapshot periodic reconciliation",
+);
+replaceOnce(
+  'this.registerEvent(this.app.vault.on("delete",m=>L(this.onFileDeleted(m),"preserve ink for a deleted note")))',
+  'this.registerEvent(this.app.vault.on("delete",m=>{m instanceof S.TFile&&m.extension==="md"&&this.portableSnapshots?.deleted(m.path),L(this.onFileDeleted(m),"preserve ink for a deleted note")}))',
+  "portable snapshot note deletion hook",
+);
+
 new vm.Script(bundle, { filename: bundlePath });
 
 if (process.argv.includes("--check")) {
