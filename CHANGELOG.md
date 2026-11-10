@@ -1,6 +1,13 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.3`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.4`.
+
+## 1.9.4 — 2026-11-10
+
+### Changed
+
+- Infinite canvas is enabled by default. Existing saved global and per-note canvas choices are reset once during migration, and later choices remain respected.
+- Toolbar active highlights and enabled/disabled states now update immediately across drawing tools, selection actions, and history buttons.
 
 ## 1.9.3 — 2026-11-06
 

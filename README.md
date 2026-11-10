@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.9.3`.
+Version `1.9.4`.
 
 This release includes:
 
@@ -18,8 +18,10 @@ This release includes:
 - SVG panning keeps the camera viewport and displayed crop separate, so handwriting retains its size while the note moves.
 - Portable SVG snapshots stored in a comment-free managed HTML block, keeping handwritten notes readable when the plugin is disabled or removed.
 - Portable snapshots refresh automatically when handwriting changes. Superseded snapshots and snapshots for erased handwriting are retained for 30 days; confirmed snapshots belonging to deleted notes are cleaned up automatically, including during retrospective startup reconciliation.
+- Infinite canvas is enabled by default. On the first run after this migration, existing saved global and per-note canvas choices are reset once; later choices remain respected.
 - If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the failing stage, cleanup operation, affected file, and exception; it does not include note contents.
 - On mobile, the two-finger swipe that invokes Obsidian's **Navigate back** action is disabled, so pinch zooming cannot return to the previous note. Back buttons, commands, and forward navigation remain available.
+- Toolbar active highlights and enabled/disabled states update immediately for Pen, Highlighter, Eraser, Lasso, Insert space, Pan, Keyboard mode, and selection/history actions.
 - Editable handwriting preserved in the plugin's `.handwriting` sidecar storage when the plugin is re-enabled.
 - After an erase gesture ends, the selected tool automatically returns to the pen or highlighter that was active before erasing.
 - After lassoing handwriting in a Markdown note, tap inside the selection, choose **Style**, then reuse the existing Pen/Highlighter options to edit selected ink colours and thickness. Pen thickness is constrained to 3–7 px; mixed selections keep pen and highlighter changes separate, and the complete style edit is undoable as one operation.
@@ -96,6 +98,8 @@ node --check tools/patch-selection-style.cjs
 node --check tools/patch-selection-layout.cjs
 node --check tools/patch-selection-overlay.cjs
 node --check tools/patch-whats-new.cjs
+node --check tools/patch-toolbar-active-state.cjs
+node --check tools/patch-infinite-canvas-migration.cjs
 node --check tools/verify-pen-size.cjs
 node --check tools/verify-lasso-resize.cjs
 node --check tools/verify-selection-style.cjs
@@ -121,6 +125,8 @@ node tools/verify-lasso-resize.cjs
 node tools/verify-selection-style.cjs
 node tools/verify-selection-layout.cjs
 node tools/verify-whats-new.cjs
+node tools/verify-toolbar-active-state.cjs
+node tools/verify-infinite-canvas-migration.cjs
 ```
 
 For the rendering investigation, install the three distributable files, enable **Developer diagnostics**, reload the plugin, and run **Diagnostics: compare handwriting rendering**. Check the synthetic fixture and the last-stroke replay at 100%, 125%, and 150%, then use **Copy report** for the measured canvas and compositing data.
