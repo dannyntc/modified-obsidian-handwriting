@@ -2131,8 +2131,7 @@ body [data-handwriting-paper]:not([data-handwriting-paper="dots"]):not([data-han
 }
 
 .handwriting-mobile-tools.is-inking,
-.handwriting-pen-pill.is-inking,
-.handwriting-note-viewport-controls.is-inking {
+.handwriting-pen-pill.is-inking {
 	opacity: 0;
 	/* Unhittable while the pen is down, as visibility: hidden made it,
 	   without a visibility change the compositor cannot animate. */
@@ -2140,12 +2139,19 @@ body [data-handwriting-paper]:not([data-handwriting-paper="dots"]):not([data-han
 	transition: opacity 40ms linear;
 }
 
+/* The zoom readout remains visible while a stroke is active, but the Pencil
+   must pass through it to the note surface. */
+.handwriting-note-viewport-controls.is-inking {
+	opacity: 1;
+	pointer-events: none;
+	transition: none;
+}
+
 /* The return delay after a lift: still invisible, still unhittable, until
    the fade starts. MobileTools setInking adds it at pen-up and takes it off
    160ms later, or at the next pen-down. */
 .handwriting-mobile-tools.is-stepping-back,
-.handwriting-pen-pill.is-stepping-back,
-.handwriting-note-viewport-controls.is-stepping-back {
+.handwriting-pen-pill.is-stepping-back {
 	pointer-events: none;
 }
 
@@ -2259,7 +2265,6 @@ body.handwriting-mode-typing .handwriting-mobile-tools.handwriting-mode-toolbar 
 
 body.handwriting-mode-typing .handwriting-mobile-tools:not(.handwriting-mode-toolbar),
 body.handwriting-mode-typing .handwriting-pen-pill,
-body.handwriting-mode-typing .handwriting-note-viewport-controls,
 body.handwriting-mode-typing .handwriting-slider-pop,
 body.handwriting-mode-typing .handwriting-strip-tip,
 body.handwriting-mode-typing .handwriting-pill-tip,

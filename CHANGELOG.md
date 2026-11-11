@@ -1,6 +1,12 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.5`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.6`.
+
+## 1.9.6 - 2026-11-11
+
+### Changed
+
+- The note zoom percentage remains visible while writing and in Typing mode; during an active Pencil stroke it stays touch-through so ink input is not intercepted.
 
 ## 1.9.5 — 2026-11-11
 
