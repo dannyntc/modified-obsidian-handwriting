@@ -1,6 +1,12 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.4`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.5`.
+
+## 1.9.5 — 2026-11-11
+
+### Changed
+
+- The pen now resets to 5 px when the plugin starts and whenever a Markdown note opens. Highlighter sizing and existing handwriting remain unchanged.
 
 ## 1.9.4 — 2026-11-10
 

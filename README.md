@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.9.4`.
+Version `1.9.5`.
 
 This release includes:
 
@@ -22,6 +22,7 @@ This release includes:
 - If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the failing stage, cleanup operation, affected file, and exception; it does not include note contents.
 - On mobile, the two-finger swipe that invokes Obsidian's **Navigate back** action is disabled, so pinch zooming cannot return to the previous note. Back buttons, commands, and forward navigation remain available.
 - Toolbar active highlights and enabled/disabled states update immediately for Pen, Highlighter, Eraser, Lasso, Insert space, Pan, Keyboard mode, and selection/history actions.
+- The pen starts at 5 px whenever a new or existing Markdown note is opened; highlighter sizing and existing handwriting are unchanged.
 - Editable handwriting preserved in the plugin's `.handwriting` sidecar storage when the plugin is re-enabled.
 - After an erase gesture ends, the selected tool automatically returns to the pen or highlighter that was active before erasing.
 - After lassoing handwriting in a Markdown note, tap inside the selection, choose **Style**, then reuse the existing Pen/Highlighter options to edit selected ink colours and thickness. Pen thickness is constrained to 3–7 px; mixed selections keep pen and highlighter changes separate, and the complete style edit is undoable as one operation.
