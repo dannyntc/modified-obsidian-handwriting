@@ -1,8 +1,15 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.6`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.7`.
 
-## 1.9.6 - 2026-11-11
+## 1.9.7 — 2026-11-13
+
+### Changed
+
+- Portable snapshot diagnostics now preserve cleanup operation and file context even when the vault throws an immutable error, and report the plugin version, diagnostic revision, and publication outcome.
+- Portable snapshot cleanup is now idempotent when note opening, reconciliation, and note deletion overlap. Existing deletion markers are reused, and plain notes are not rewritten during cleanup.
+
+## 1.9.6 — 2026-11-11
 
 ### Changed
 

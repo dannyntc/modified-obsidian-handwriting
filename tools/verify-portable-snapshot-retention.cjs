@@ -159,6 +159,101 @@ const managerFor = ({ now = 0, notes = [], assets = [] } = {}) => {
   await orphan.manager.reconcile();
   if (!orphan.state.trashed.includes(current)) throw new Error("snapshot for a deleted note was not removed during retrospective reconciliation");
 
+  const concurrent = managerFor({
+    now: 10000,
+    notes: [{ path: note, content: "# Note\n" }],
+    assets: [{ path: current, mtime: 1 }],
+  });
+  const markerPath = deletedMarker;
+  let markerCreateAttempts = 0;
+  let releaseMarkerCreate;
+  let markerCreateStarted;
+  const markerStarted = new Promise(resolve => { markerCreateStarted = resolve; });
+  const markerGate = new Promise(resolve => { releaseMarkerCreate = resolve; });
+  const originalCreate = concurrent.vault.create;
+  concurrent.vault.create = async (path, content) => {
+    if (path !== markerPath) return originalCreate(path, content);
+    markerCreateAttempts++;
+    if (markerCreateAttempts === 1) {
+      markerCreateStarted();
+      await markerGate;
+      return originalCreate(path, content);
+    }
+    throw new Error("File already exists.");
+  };
+  const firstMarker = concurrent.manager.markDeleted("page-123");
+  await markerCreateStarted;
+  const secondMarker = concurrent.manager.markDeleted("page-123");
+  releaseMarkerCreate();
+  await Promise.all([firstMarker, secondMarker]);
+  if (markerCreateAttempts !== 1) throw new Error(`concurrent deletion marker creation ran ${markerCreateAttempts} times`);
+
+  const adapterOnly = managerFor({
+    now: 11000,
+    notes: [{ path: note, content: "# Note\n" }],
+    assets: [{ path: current, mtime: 1 }],
+  });
+  const adapterMarker = JSON.stringify({ version: 1, pageId: "page-123", safePageId: "page-123", deletedAt: 10000 });
+  adapterOnly.vault.adapter = {
+    async exists(path) { return path === markerPath; },
+    async read(path) { if (path === markerPath) return adapterMarker; throw new Error("missing"); },
+  };
+  let adapterCreateAttempts = 0;
+  const adapterCreate = adapterOnly.vault.create;
+  adapterOnly.vault.create = async (path, content) => {
+    if (path === markerPath) adapterCreateAttempts++;
+    return adapterCreate(path, content);
+  };
+  await adapterOnly.manager.markDeleted("page-123");
+  if (adapterCreateAttempts !== 0) throw new Error("adapter-only deletion marker was recreated");
+
+  const plain = managerFor({
+    now: 12000,
+    notes: [{ path: note, content: "# Plain note\n" }],
+  });
+  let plainWrites = 0;
+  const plainProcess = plain.vault.process;
+  plain.vault.process = async (...args) => { plainWrites++; return plainProcess(...args); };
+  plain.manager.pageHasInk = () => false;
+  await plain.manager.run(note, "open");
+  if (plainWrites !== 0) throw new Error("plain note cleanup performed an unnecessary Markdown write");
+
+  const concurrentDelete = managerFor({
+    now: 13000,
+    notes: [],
+    assets: [
+      { path: current, mtime: 1 },
+      { path: deletedMarker, content: JSON.stringify({ version: 1, pageId: "page-123", deletedAt: 12000 }), mtime: 12000 },
+    ],
+  });
+  let firstTrashStarted;
+  let releaseFirstTrash;
+  const firstTrash = new Promise(resolve => { firstTrashStarted = resolve; });
+  const trashGate = new Promise(resolve => { releaseFirstTrash = resolve; });
+  let trashAttempts = 0;
+  const originalTrash = concurrentDelete.vault.trash;
+  concurrentDelete.vault.trash = async file => {
+    if (file.path === current) {
+      trashAttempts++;
+      if (trashAttempts === 1) {
+        firstTrashStarted();
+        await trashGate;
+        return originalTrash(file);
+      }
+      throw new Error("File already exists.");
+    }
+    return originalTrash(file);
+  };
+  const firstDelete = concurrentDelete.manager.removeOrphanedPage("page-123");
+  await firstTrashStarted;
+  const secondDelete = concurrentDelete.manager.removeOrphanedPage("page-123");
+  await new Promise(resolve => setTimeout(resolve, 0));
+  releaseFirstTrash();
+  await Promise.all([firstDelete, secondDelete]);
+  if (!concurrentDelete.state.trashed.includes(current) || !concurrentDelete.state.trashed.includes(deletedMarker)) {
+    throw new Error("concurrent deleted-note cleanup did not finish idempotently");
+  }
+
   if (notices.length !== 0) throw new Error(`unexpected notices: ${notices.join(", ")}`);
   console.log("PASS: portable snapshot retention and orphan cleanup");
 })().catch(error => {

@@ -94,6 +94,11 @@ var HandwritingPortableSnapshots=(()=>{
       this.sequence=0;
       this.reconcileInFlight=null;
       this.lastError=null;
+      this.version=typeof options.version==="string"?options.version:"unknown";
+      this.diagnosticRevision="portable-snapshot-diagnostics-2";
+      this.publications=new Map;
+      this.markerRuns=new Map;
+      this.cleanupRuns=new Map;
     }
 
     destroy(){
@@ -101,6 +106,8 @@ var HandwritingPortableSnapshots=(()=>{
       for(const timer of this.timers.values())clearTimeout(timer);
       this.timers.clear();
       this.pending.clear();
+      this.markerRuns.clear();
+      this.cleanupRuns.clear();
     }
 
     async flush(){
@@ -226,16 +233,28 @@ var HandwritingPortableSnapshots=(()=>{
 
     pageHasInk(path){return I.inkPresence(path)==="ink"}
 
-    annotateError(error,context){
-      if(error&&typeof error==="object"){
-        try{error.handwritingSnapshotContext={...(error.handwritingSnapshotContext||{}),...context}}catch{}
-      }
-      return error;
+    publicationContext(path){
+      const state=path?this.publications.get(path):null;
+      if(!state)return{};
+      return{publication:`attachment ${state.attachmentCreated?"created":"not created"}; note link ${state.noteUpdated?"updated":"not updated"}`};
     }
 
-    async cleanupOperation(operation,file,callback){
+    wrapError(error,context){
+      let name="Error";
+      let message="Unknown error";
+      try{name=String(error?.name||name)}catch{}
+      try{message=String(error?.message??error??message)}catch{}
+      const wrapped=new Error(message);
+      wrapped.name=name;
+      try{wrapped.stack=String(error?.stack||wrapped.stack)}catch{}
+      try{wrapped.cause=error}catch{}
+      wrapped.handwritingSnapshotContext={...(error?.handwritingSnapshotContext||{}),...context};
+      return wrapped;
+    }
+
+    async cleanupOperation(operation,file,callback,extra={}){
       try{return await callback()}
-      catch(error){throw this.annotateError(error,{operation,file:file?.path||null})}
+      catch(error){throw this.wrapError(error,{...extra,operation,file:file?.path||null})}
     }
 
     assetTime(file){
@@ -246,60 +265,98 @@ var HandwritingPortableSnapshots=(()=>{
       return Number.isFinite(parsed)?parsed:this.now();
     }
 
-    async readTombstone(pageId){
-      const file=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
-      if(!file)return null;
+    async tombstoneState(pageId){
+      const path=this.tombstonePath(pageId);
+      const file=this.app.vault.getAbstractFileByPath(path);
+      let source=null,exists=!!file;
       try{
-        const data=JSON.parse(await this.app.vault.cachedRead(file));
+        if(file)source=await this.app.vault.cachedRead(file);
+        else if(typeof this.app.vault.adapter?.exists==="function"&&await this.app.vault.adapter.exists(path)){
+          exists=!0;
+          if(typeof this.app.vault.adapter.read==="function")source=await this.app.vault.adapter.read(path);
+        }
+      }catch{}
+      if(typeof source!=="string")return{path,file,exists,deletedAt:null};
+      try{
+        const data=JSON.parse(source);
         const deletedAt=Number(data?.deletedAt);
-        return Number.isFinite(deletedAt)&&deletedAt>=0?deletedAt:null;
-      }catch{return null}
+        return{path,file,exists:!0,deletedAt:Number.isFinite(deletedAt)&&deletedAt>=0?deletedAt:null};
+      }catch{return{path,file,exists:!0,deletedAt:null}}
     }
 
-    async markDeleted(pageId){
+    async readTombstone(pageId){
+      return (await this.tombstoneState(pageId)).deletedAt;
+    }
+
+    async markDeleted(pageId,contextPath=null){
       const assets=this.snapshotFiles(pageId);
       if(assets.length===0)return;
-      const path=this.tombstonePath(pageId);
-      const existing=this.app.vault.getAbstractFileByPath(path);
-      const deletedAt=await this.readTombstone(pageId)??this.now();
-      const content=JSON.stringify({version:1,pageId,safePageId:safePart(pageId),deletedAt});
-      if(existing)await this.app.vault.process(existing,()=>content);
-      else{
-        await this.ensureFolder(this.pageFolder(pageId));
-        await this.app.vault.create(path,content);
-      }
+      const prior=this.markerRuns.get(pageId);
+      if(prior)return prior;
+      const task=(async()=>{
+        const state=await this.tombstoneState(pageId);
+        if(state.deletedAt!==null)return;
+        const deletedAt=this.now();
+        const content=JSON.stringify({version:1,pageId,safePageId:safePart(pageId),deletedAt});
+        const context=this.publicationContext(contextPath);
+        if(state.exists){
+          if(state.file)await this.cleanupOperation("update deletion marker",state.file,()=>this.app.vault.process(state.file,()=>content),context);
+          else if(typeof this.app.vault.adapter?.write==="function")await this.cleanupOperation("update deletion marker",{path:state.path},()=>this.app.vault.adapter.write(state.path,content),context);
+          else throw new Error(`Deletion marker exists but cannot be updated: ${state.path}`);
+          return;
+        }
+        await this.cleanupOperation("create deletion marker folder",{path:this.pageFolder(pageId)},()=>this.ensureFolder(this.pageFolder(pageId)),context);
+        try{
+          await this.cleanupOperation("create deletion marker",{path:state.path},()=>this.app.vault.create(state.path,content),context);
+        }catch(error){
+          if((await this.tombstoneState(pageId)).deletedAt!==null)return;
+          throw error;
+        }
+      })();
+      this.markerRuns.set(pageId,task);
+      try{return await task}
+      finally{if(this.markerRuns.get(pageId)===task)this.markerRuns.delete(pageId)}
     }
 
-    async removeFile(file,operation="remove file"){
+    async removeFile(file,operation="remove file",contextPath=null){
       return this.cleanupOperation(operation,file,async()=>{
         if(typeof this.app.vault.trash==="function")return this.app.vault.trash(file,true);
         if(typeof this.app.vault.delete==="function")return this.app.vault.delete(file);
         throw new Error(`Vault cannot remove ${file.path}`);
-      });
+      },this.publicationContext(contextPath));
     }
 
-    async clearDeleted(pageId){
+    async clearDeleted(pageId,contextPath=null){
       const file=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
-      if(file)await this.removeFile(file,"clear deletion marker");
+      if(file)await this.removeFile(file,"clear deletion marker",contextPath);
     }
 
-    async cleanupPage(pageId,referenced,live){
+    async cleanupPage(pageId,referenced,live,contextPath=null){
+      const prior=this.cleanupRuns.get(pageId);
+      if(prior)return prior;
+      const task=this.cleanupPageNow(pageId,referenced,live,contextPath);
+      this.cleanupRuns.set(pageId,task);
+      try{return await task}
+      finally{if(this.cleanupRuns.get(pageId)===task)this.cleanupRuns.delete(pageId)}
+    }
+
+    async cleanupPageNow(pageId,referenced,live,contextPath=null){
       const assets=this.snapshotFiles(pageId);
       const tombstone=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
       if(!live){
         const unreferenced=assets.filter(file=>!referenced.has(file.path));
-        for(const file of unreferenced)await this.removeFile(file,"remove orphaned snapshot");
-        if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone,"remove orphaned deletion marker");
+        for(const file of unreferenced)await this.removeFile(file,"remove orphaned snapshot",contextPath);
+        if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone,"remove orphaned deletion marker",contextPath);
         return;
       }
-      const deletedAt=await this.cleanupOperation("read deletion marker",tombstone,()=>this.readTombstone(pageId));
+      const deletedAt=await this.cleanupOperation("read deletion marker",tombstone,()=>this.readTombstone(pageId),this.publicationContext(contextPath));
       const now=this.now();
       const deletionExpired=deletedAt!==null&&now-deletedAt>=RETENTION_MS;
       for(const file of assets){
         if(referenced.has(file.path))continue;
-        if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file,"remove unreferenced snapshot");
+        if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file,"remove unreferenced snapshot",contextPath);
       }
-      if(tombstone&&deletionExpired)await this.removeFile(tombstone,"remove expired deletion marker");
+      if(tombstone&&deletionExpired)await this.removeFile(tombstone,"remove expired deletion marker",contextPath);
     }
 
     async removeOrphanedPage(pageId){
@@ -354,7 +411,7 @@ var HandwritingPortableSnapshots=(()=>{
         const source=await this.app.vault.cachedRead(file);
         if(!this.pageHasInk(path)){
           stage="cleanup";
-          await this.removePublishedBlock(file);
+          await this.removePublishedBlock(file,source);
           if(existingAssets.length>0)await this.markDeleted(pageId);
           return!1;
         }
@@ -473,38 +530,48 @@ var HandwritingPortableSnapshots=(()=>{
 
     async publish(file,snapshot,generation,setStage=()=>{}){
       const pageId=this.pageIdFor(file.path);
+      const publication={attachmentCreated:false,noteUpdated:false};
+      this.publications.set(file.path,publication);
       const folder=`${FOLDER}/${safePart(pageId)}`;
-      setStage("create");
-      await this.ensureFolder(folder);
-      const stamp=`${generation}-${Date.now()}-${++this.sequence}`;
-      const assetPath=`${folder}/snapshot-${safePart(stamp)}.svg`;
-      await this.app.vault.create(assetPath,snapshot.svg);
-      const link=relativePath(file.path,assetPath);
-      const block=managedBlock(link);
-      this.publishing.add(file.path);
       try{
-        setStage("update");
-        await this.app.vault.process(file,current=>{
-          return consolidateManagedBlock(current,block);
-        });
-      }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
-      setStage("cleanup");
-      await this.clearDeleted(pageId);
-      const references=await this.cleanupOperation("scan snapshot references",null,()=>this.referencedSnapshots());
-      if(references.reliable)await this.cleanupPage(pageId,references.paths,!0);
+        setStage("create");
+        await this.ensureFolder(folder);
+        const stamp=`${generation}-${Date.now()}-${++this.sequence}`;
+        const assetPath=`${folder}/snapshot-${safePart(stamp)}.svg`;
+        await this.app.vault.create(assetPath,snapshot.svg);
+        publication.attachmentCreated=true;
+        const link=relativePath(file.path,assetPath);
+        const block=managedBlock(link);
+        this.publishing.add(file.path);
+        try{
+          setStage("update");
+          await this.app.vault.process(file,current=>{
+            return consolidateManagedBlock(current,block);
+          });
+          publication.noteUpdated=true;
+        }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
+        setStage("cleanup");
+        await this.clearDeleted(pageId,file.path);
+        const references=await this.cleanupOperation("scan snapshot references",null,()=>this.referencedSnapshots(),this.publicationContext(file.path));
+        if(references.reliable)await this.cleanupPage(pageId,references.paths,!0,file.path);
+      }finally{this.publications.delete(file.path)}
     }
 
-    async removePublishedBlock(file){
+    async removePublishedBlock(file,source=null){
       this.publishing.add(file.path);
       try{
         let changed=!1;
-        await this.app.vault.process(file,current=>{
+        if(source===null){
+          try{source=await this.app.vault.cachedRead(file)}catch{}
+        }
+        if(typeof source==="string"&&!managedBlockPattern().test(source)&&!legacyMarkerPattern().test(source))return!1;
+        await this.cleanupOperation("remove published snapshot block",file,()=>this.app.vault.process(file,current=>{
           const matches=[...current.matchAll(managedBlockPattern())];
           if(matches.length===0&&!legacyMarkerPattern().test(current))return current;
           changed=!0;
           const cleaned=withoutManagedBlock(current);
           return cleaned?`${cleaned}\n`:"";
-        });
+        }));
         return changed;
       }finally{setTimeout(()=>this.publishing.delete(file.path),500)}
     }
@@ -527,7 +594,7 @@ var HandwritingPortableSnapshots=(()=>{
       const stack=diagnosticString(error?.stack||"",4500);
       const operation=diagnosticLine(context.operation||"",160);
       const file=diagnosticLine(context.file||"",800);
-      this.lastError={error,path:diagnosticLine(path),stage:diagnosticLine(stage,80)||"unknown",reason:diagnosticLine(reason,80)||"unknown",operation,file,at:this.now(),name,message,stack};
+      this.lastError={error,path:diagnosticLine(path),stage:diagnosticLine(stage,80)||"unknown",reason:diagnosticLine(reason,80)||"unknown",operation,file,publication:diagnosticLine(context.publication||"",240),version:this.version,diagnostic:this.diagnosticRevision,at:this.now(),name,message,stack};
     }
 
     latestErrorText(){
@@ -539,10 +606,13 @@ var HandwritingPortableSnapshots=(()=>{
         "Handwriting portable snapshot error",
         `time: ${time}`,
         `note: ${error.path}`,
+        `version: ${error.version}`,
+        `diagnostic: ${error.diagnostic}`,
         `stage: ${error.stage}`,
         `reason: ${error.reason}`,
         ...(error.operation?[`operation: ${error.operation}`]:[]),
         ...(error.file?[`file: ${error.file}`]:[]),
+        ...(error.publication?[`publication: ${error.publication}`]:[]),
         `error: ${error.name}: ${error.message}`,
         "stack:",
         error.stack||"(none)",

@@ -96,14 +96,15 @@ const vault = {
   }
 
   const oldSnapshot = new TFile("Handwriting snapshots/page-123/snapshot-1-0-1.svg");
+  const frozenCollision = Object.freeze(new Error("File already exists."));
   const cleanupVault = {
     getAbstractFileByPath: path => path === file.path ? file : path === oldSnapshot.path ? oldSnapshot : null,
     getFiles: () => [file, oldSnapshot],
     getMarkdownFiles: () => [file],
     cachedRead: async target => target.content,
-    trash: async () => { throw new Error("File already exists."); },
+    trash: async () => { throw frozenCollision; },
   };
-  const cleanupManager = new context.PortableSnapshots({ vault: cleanupVault }, { now: () => 30 * 24 * 60 * 60 * 1000 + 1 });
+  const cleanupManager = new context.PortableSnapshots({ vault: cleanupVault }, { now: () => 30 * 24 * 60 * 60 * 1000 + 1, version: "test-version" });
   cleanupManager.capture = async () => ({ svg: "<svg/>", generation: 1 });
   cleanupManager.publish = async (...args) => {
     args[3]("cleanup");
@@ -119,6 +120,41 @@ const vault = {
   }
   if (!cleanupReport.includes("File already exists.")) {
     throw new Error(`cleanup exception was not retained: ${cleanupReport}`);
+  }
+  if (!cleanupReport.includes("version: test-version") || !cleanupReport.includes("diagnostic: portable-snapshot-diagnostics-2")) {
+    throw new Error(`diagnostic identity was not retained: ${cleanupReport}`);
+  }
+
+  const publishedFile = new TFile("folder/Published note.md", "# Published note");
+  const stalePublishedSnapshot = new TFile("Handwriting snapshots/page-123/snapshot-1-0-2.svg");
+  const publicationFiles = new Map([[publishedFile.path, publishedFile], [stalePublishedSnapshot.path, stalePublishedSnapshot]]);
+  const publicationFolders = new Set();
+  const publicationVault = {
+    getAbstractFileByPath: path => publicationFiles.get(path) ?? (publicationFolders.has(path) ? {} : null),
+    getFiles: () => [...publicationFiles.values()],
+    getMarkdownFiles: () => [publishedFile],
+    cachedRead: async target => target.content,
+    async createFolder(path) { publicationFolders.add(path); },
+    async create(path, content) {
+      const created = new TFile(path, content);
+      publicationFiles.set(path, created);
+      return created;
+    },
+    async process(target, callback) {
+      target.content = callback(target.content);
+      return target;
+    },
+    trash: async () => { throw frozenCollision; },
+  };
+  const publicationManager = new context.PortableSnapshots({ vault: publicationVault }, { now: () => 30 * 24 * 60 * 60 * 1000 + 1, version: "test-version" });
+  publicationManager.capture = async () => ({ svg: "<svg/>", generation: 1 });
+  await publicationManager.run(publishedFile.path, "open").catch(() => {});
+  const publicationReport = publicationManager.latestErrorText();
+  if (!publicationReport?.includes("operation: remove unreferenced snapshot")) {
+    throw new Error(`publication cleanup operation was not reported: ${publicationReport}`);
+  }
+  if (!publicationReport.includes("publication: attachment created; note link updated")) {
+    throw new Error(`publication outcome was not reported: ${publicationReport}`);
   }
 
   const deletionMarker = new TFile("Handwriting snapshots/page-123/.handwriting-snapshot-deleted.json");
@@ -141,6 +177,9 @@ const vault = {
 
   if (!bundle.includes('id:"handwriting-show-portable-snapshot-error"')) {
     throw new Error("the iPad-accessible portable snapshot error command is missing from the bundle");
+  }
+  if (!bundle.includes('new HandwritingPortableSnapshots(this.app,{version:this.manifest.version})')) {
+    throw new Error("portable snapshot diagnostics are not tied to the running plugin version");
   }
 
   console.log("PASS: portable snapshot failure diagnostics retain bounded stage information");

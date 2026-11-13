@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.9.6`.
+Version `1.9.7`.
 
 This release includes:
 
@@ -18,8 +18,9 @@ This release includes:
 - SVG panning keeps the camera viewport and displayed crop separate, so handwriting retains its size while the note moves.
 - Portable SVG snapshots stored in a comment-free managed HTML block, keeping handwritten notes readable when the plugin is disabled or removed.
 - Portable snapshots refresh automatically when handwriting changes. Superseded snapshots and snapshots for erased handwriting are retained for 30 days; confirmed snapshots belonging to deleted notes are cleaned up automatically, including during retrospective startup reconciliation.
+- Snapshot cleanup is safe when note opening, background reconciliation, and note deletion overlap. Existing deletion markers are reused, and notes without handwriting are not rewritten.
 - Infinite canvas is enabled by default. On the first run after this migration, existing saved global and per-note canvas choices are reset once; later choices remain respected.
-- If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the failing stage, cleanup operation, affected file, and exception; it does not include note contents.
+- If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the plugin version, diagnostic revision, failing stage, cleanup operation, affected file, publication outcome, and exception; it does not include note contents.
 - On mobile, the two-finger swipe that invokes Obsidian's **Navigate back** action is disabled, so pinch zooming cannot return to the previous note. Back buttons, commands, and forward navigation remain available.
 - Toolbar active highlights and enabled/disabled states update immediately for Pen, Highlighter, Eraser, Lasso, Insert space, Pan, Keyboard mode, and selection/history actions.
 - The pen starts at 5 px whenever a new or existing Markdown note is opened; highlighter sizing and existing handwriting are unchanged.
@@ -132,7 +133,7 @@ node tools/verify-infinite-canvas-migration.cjs
 
 For the rendering investigation, install the three distributable files, enable **Developer diagnostics**, reload the plugin, and run **Diagnostics: compare handwriting rendering**. Check the synthetic fixture and the last-stroke replay at 100%, 125%, and 150%, then use **Copy report** for the measured canvas and compositing data.
 
-When a note shows the portable snapshot update notice on iPad, open the command palette and run **Bug report: show portable snapshot error**. Tap **Copy** in the report and share the text; it identifies whether loading, rendering, attachment creation, note update, or a specific cleanup operation failed without including the note body.
+When a note shows the portable snapshot update notice on iPad, open the command palette and run **Bug report: show portable snapshot error**. Tap **Copy** in the report and share the text; it identifies the plugin/diagnostic revision and whether loading, rendering, attachment creation, note update, or a specific cleanup operation failed without including the note body.
 
 Completed SVG ink now uses the permanent note-local layer automatically. Compare the same note at 100% and 150%, verify that it remains below sidebars and other UI, confirm that **Diagnostics: show zoom report** opens, and test Pencil lift, scrolling, pinch zoom, erasing, and lasso selection. If the note root cannot be mapped safely, the plugin hides SVG and restores Canvas rendering for that note session.
 

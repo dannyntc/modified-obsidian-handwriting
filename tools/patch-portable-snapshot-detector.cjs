@@ -56,9 +56,12 @@ replaceOnce(
   'this.addCommand({id:"handwriting-show-portable-snapshot-error",name:"Bug report: show portable snapshot error",callback:()=>{const report=this.portableSnapshots?.latestErrorText();report?new Xn(this.app,"Portable snapshot error",report).open():new S.Notice("Handwriting: no portable snapshot error recorded")}}),this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
   "portable snapshot error report command",
 );
-replaceOnce(
+const versionedPortableInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app,{version:this.manifest.version}),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
+const existingPortableInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
+if (bundle.includes(existingPortableInstallation)) replaceOnce(existingPortableInstallation,versionedPortableInstallation,"portable snapshot version installation");
+else replaceOnce(
   'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),document.body.classList.add("handwriting-installed"),',
-  'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),',
+  versionedPortableInstallation,
   "mobile swipe-back guard installation",
 );
 replaceOnce(
