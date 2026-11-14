@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const source = fs.readFileSync("tools/portable-snapshot-source.js", "utf8");
+const recoverySource = fs.readFileSync("tools/svg-recovery-source.js", "utf8");
 const bundle = fs.readFileSync("main.js", "utf8");
 
 class TFile {
@@ -24,7 +25,7 @@ const context = {
   clearTimeout,
   console,
 };
-vm.runInNewContext(`${source}\nthis.PortableSnapshots=HandwritingPortableSnapshots;`, context);
+vm.runInNewContext(`${recoverySource}\n${source}\nthis.PortableSnapshots=HandwritingPortableSnapshots;`, context);
 
 (async()=>{
   const file = new TFile("folder/note.md");
@@ -116,6 +117,8 @@ vm.runInNewContext(`${source}\nthis.PortableSnapshots=HandwritingPortableSnapsho
   await duplicateRemovalManager.removePublishedBlock(file);
   if (countManagedBlocks(duplicateRemoval.note) !== 0 || !duplicateRemoval.note.includes("Keep this text")) throw new Error("duplicate snapshot removal damaged note content");
   if (!bundle.includes("HandwritingPortableSnapshots")) throw new Error("manager is missing from main.js");
+  if (!bundle.includes("HandwritingSvgRecovery")) throw new Error("SVG recovery helper is missing from main.js");
+  if (!bundle.includes("handwriting-recovery")) throw new Error("future snapshots do not carry recovery metadata");
   if (!bundle.includes("portableSnapshots?.reconcile()")) throw new Error("startup or periodic snapshot reconciliation is missing from main.js");
   if (!bundle.includes("portableSnapshots?.deleted(m.path)")) throw new Error("note deletion snapshot cleanup hook is missing from main.js");
   if (!bundle.includes(".handwriting-snapshot-deleted.json")) throw new Error("snapshot deletion retention marker is missing from main.js");

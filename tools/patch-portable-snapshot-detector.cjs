@@ -3,11 +3,17 @@ const vm = require("node:vm");
 
 const bundlePath = "main.js";
 const sourcePath = "tools/portable-snapshot-source.js";
+const recoverySourcePath = "tools/svg-recovery-source.js";
+const managerSourcePath = "tools/svg-recovery-manager-source.js";
 const source = fs.readFileSync(sourcePath, "utf8").trim();
+const recoverySource = fs.readFileSync(recoverySourcePath, "utf8").trim();
+const managerSource = fs.readFileSync(managerSourcePath, "utf8").trim();
 const swipeSource = fs.readFileSync("tools/swipe-back-guard-source.js", "utf8").trim();
 let bundle = fs.readFileSync(bundlePath, "utf8");
 
 const sourceMarker = "var HandwritingPortableSnapshots=(()=>{";
+const recoveryMarker = "var HandwritingSvgRecovery = (() => {";
+const managerMarker = "var HandwritingSvgRecoveryManager = (() => {";
 const sourceBodyStart = source.indexOf(sourceMarker);
 if (sourceBodyStart < 0) throw new Error("portable snapshot source marker not found");
 const sourceHeader = source.slice(0, sourceBodyStart);
@@ -17,7 +23,19 @@ const helperEnd = helperStart >= 0 ? bundle.indexOf("\n\nvar Ry=", helperStart) 
 if (helperStart < 0 || helperEnd < 0) throw new Error("portable snapshot helper boundaries not found");
 let helperPrefix = bundle.slice(0, helperStart);
 while (helperPrefix.endsWith(sourceHeader)) helperPrefix = helperPrefix.slice(0, -sourceHeader.length);
-bundle = `${helperPrefix}${sourceHeader}${sourceBody}\n\n${swipeSource}${bundle.slice(helperEnd)}`;
+const previousRecoveryStart = helperPrefix.indexOf(recoveryMarker);
+if (previousRecoveryStart >= 0) {
+  const previousRecoveryEnd = helperPrefix.indexOf("\n})();", previousRecoveryStart);
+  if (previousRecoveryEnd < 0) throw new Error("previous SVG recovery helper boundary not found");
+  helperPrefix = helperPrefix.slice(0, previousRecoveryStart) + helperPrefix.slice(previousRecoveryEnd + "\n})();".length);
+}
+const previousManagerStart = helperPrefix.indexOf(managerMarker);
+if (previousManagerStart >= 0) {
+  const previousManagerEnd = helperPrefix.indexOf("\n})();", previousManagerStart);
+  if (previousManagerEnd < 0) throw new Error("previous SVG recovery manager boundary not found");
+  helperPrefix = helperPrefix.slice(0, previousManagerStart) + helperPrefix.slice(previousManagerEnd + "\n})();".length);
+}
+bundle = `${helperPrefix}${recoverySource}\n\n${managerSource}\n\n${sourceHeader}${sourceBody}\n\n${swipeSource}${bundle.slice(helperEnd)}`;
 
 const matcherBefore = ",zI=/^ {0,3}<img\\b/i;function Ig";
 const matcherAfter = ",zI=new RegExp([\"^ {0,3}<\",\"img\",\"\\\\b\"].join(\"\"),\"i\");function Ig";
@@ -51,24 +69,40 @@ replaceOnce(
   'this.registerEvent(this.app.vault.on("delete",m=>{m instanceof S.TFile&&m.extension==="md"&&this.portableSnapshots?.deleted(m.path),L(this.onFileDeleted(m),"preserve ink for a deleted note")}))',
   "portable snapshot note deletion hook",
 );
-replaceOnce(
-  'this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
-  'this.addCommand({id:"handwriting-show-portable-snapshot-error",name:"Bug report: show portable snapshot error",callback:()=>{const report=this.portableSnapshots?.latestErrorText();report?new Xn(this.app,"Portable snapshot error",report).open():new S.Notice("Handwriting: no portable snapshot error recorded")}}),this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
-  "portable snapshot error report command",
-);
-const versionedPortableInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app,{version:this.manifest.version}),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
-const existingPortableInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
-if (bundle.includes(existingPortableInstallation)) replaceOnce(existingPortableInstallation,versionedPortableInstallation,"portable snapshot version installation");
-else replaceOnce(
-  'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),document.body.classList.add("handwriting-installed"),',
-  versionedPortableInstallation,
-  "mobile swipe-back guard installation",
-);
-replaceOnce(
-  'this.register(()=>{document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
-  'this.register(()=>{this.swipeBackGuard?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
-  "mobile swipe-back guard cleanup",
-);
+const recoveryCommands = 'this.addCommand({id:"handwriting-restore-svg-backup",name:"Restore handwriting from SVG backup",callback:()=>this.svgRecovery?.restoreActive()}),this.addCommand({id:"handwriting-finish-svg-recovery",name:"Finish handwriting recovery review",callback:()=>this.svgRecovery?.finishReview()}),';
+if (!bundle.includes('id:"handwriting-restore-svg-backup"')) {
+  replaceOnce(
+    'this.addCommand({id:"handwriting-rebuild-portable-snapshots"',
+    `${recoveryCommands}this.addCommand({id:"handwriting-rebuild-portable-snapshots"`,
+    "SVG recovery commands",
+  );
+}
+const portableErrorCommand = 'this.addCommand({id:"handwriting-show-portable-snapshot-error",name:"Bug report: show portable snapshot error",callback:()=>{const report=this.portableSnapshots?.latestErrorText();report?new Xn(this.app,"Portable snapshot error",report).open():new S.Notice("Handwriting: no portable snapshot error recorded")}}),';
+while (bundle.split(portableErrorCommand).length - 1 > 1) bundle = bundle.replace(portableErrorCommand, "");
+const versionedPortableInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app,{version:this.manifest.version}),this.svgRecovery=new HandwritingSvgRecoveryManager(this.app,{portableSnapshots:this.portableSnapshots}),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
+if(!bundle.includes(versionedPortableInstallation)){
+  const existingVersionedInstallation='this.portableSnapshots=new HandwritingPortableSnapshots(this.app,{version:this.manifest.version}),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),';
+  if(bundle.includes(existingVersionedInstallation)) replaceOnce(existingVersionedInstallation,versionedPortableInstallation,"portable snapshot and SVG recovery installation");
+  else replaceOnce(
+    'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),document.body.classList.add("handwriting-installed"),',
+    'this.portableSnapshots=new HandwritingPortableSnapshots(this.app),this.svgRecovery=new HandwritingSvgRecoveryManager(this.app,{portableSnapshots:this.portableSnapshots}),this.swipeBackGuard=new HandwritingSwipeBackGuard(this.app),this.swipeBackGuard.install(),document.body.classList.add("handwriting-installed"),',
+    "mobile swipe-back and SVG recovery installation",
+  );
+}
+const svgRecoveryCleanup='this.register(()=>{this.svgRecovery?.destroy(),this.swipeBackGuard?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),';
+if (!bundle.includes(svgRecoveryCleanup) && bundle.includes('this.register(()=>{this.swipeBackGuard?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),')) {
+  replaceOnce(
+    'this.register(()=>{this.swipeBackGuard?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
+    svgRecoveryCleanup,
+    "SVG recovery and mobile swipe-back cleanup",
+  );
+} else if (!bundle.includes(svgRecoveryCleanup)) {
+  replaceOnce(
+    'this.register(()=>{document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
+    'this.register(()=>{this.svgRecovery?.destroy(),document.body.classList.remove("handwriting-installed"),this.portableSnapshots?.destroy()}),',
+    "SVG recovery cleanup",
+  );
+}
 new vm.Script(bundle, { filename: bundlePath });
 
 if (process.argv.includes("--check")) {

@@ -15,6 +15,12 @@ This history reconstructs the changes made after the installed `1.4.23` bundle. 
 
 - The note zoom percentage remains visible while writing and in Typing mode; during an active Pencil stroke it stays touch-through so ink input is not intercepted.
 
+## Unreleased — 2026-11-10
+
+### Changed
+
+- Added editable SVG handwriting recovery. Existing portable SVG outlines can be recovered into a separate review note, while future snapshots embed the original stroke data; reviewed recovery can replace only the original note's handwriting and creates a backup first.
+
 ## 1.9.5 — 2026-11-11
 
 ### Changed

@@ -97,9 +97,13 @@ var HandwritingPortableSnapshots=(()=>{
       this.version=typeof options.version==="string"?options.version:"unknown";
       this.diagnosticRevision="portable-snapshot-diagnostics-2";
       this.publications=new Map;
+      this.protectedSnapshots=new Set;
       this.markerRuns=new Map;
       this.cleanupRuns=new Map;
     }
+
+    protectSnapshot(path){if(typeof path==="string")this.protectedSnapshots.add(path)}
+    releaseSnapshot(path){this.protectedSnapshots.delete(path)}
 
     destroy(){
       this.stopped=true;
@@ -344,7 +348,7 @@ var HandwritingPortableSnapshots=(()=>{
       const assets=this.snapshotFiles(pageId);
       const tombstone=this.app.vault.getAbstractFileByPath(this.tombstonePath(pageId));
       if(!live){
-        const unreferenced=assets.filter(file=>!referenced.has(file.path));
+        const unreferenced=assets.filter(file=>!referenced.has(file.path)&&!this.protectedSnapshots.has(file.path));
         for(const file of unreferenced)await this.removeFile(file,"remove orphaned snapshot",contextPath);
         if(tombstone&&unreferenced.length===assets.length)await this.removeFile(tombstone,"remove orphaned deletion marker",contextPath);
         return;
@@ -353,7 +357,7 @@ var HandwritingPortableSnapshots=(()=>{
       const now=this.now();
       const deletionExpired=deletedAt!==null&&now-deletedAt>=RETENTION_MS;
       for(const file of assets){
-        if(referenced.has(file.path))continue;
+        if(referenced.has(file.path)||this.protectedSnapshots.has(file.path))continue;
         if(deletionExpired||now-this.assetTime(file)>=RETENTION_MS)await this.removeFile(file,"remove unreferenced snapshot",contextPath);
       }
       if(tombstone&&deletionExpired)await this.removeFile(tombstone,"remove expired deletion marker",contextPath);
@@ -464,8 +468,16 @@ var HandwritingPortableSnapshots=(()=>{
         const pageHeight=Math.max(textHeight,inkBounds.maxY-originY,1);
         const background=this.background(host,doc,win);
         const ink=strokes.length?`<g transform="translate(${number(-originX)} ${number(-originY)})">${EE(strokes,null)}</g>`:"";
+        const recovery=typeof HandwritingSvgRecovery==="undefined"?null:HandwritingSvgRecovery;
+        const metadata=recovery?recovery.metadataElement({
+          pageId:this.pageIdFor(file.path),
+          sourcePath:file.path,
+          generation,
+          fontRefPx:I.fontRefPx(file.path),
+          strokes,
+        }):"";
         const html=`<div xmlns="http://www.w3.org/1999/xhtml" style="width:${number(textWidth)}px;min-height:${number(textHeight)}px;background:${escapeXml(background)}">${rendered}</div>`;
-        const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${number(pageWidth)}" height="${number(pageHeight)}" viewBox="0 0 ${number(pageWidth)} ${number(pageHeight)}"><title>Handwriting snapshot</title><rect width="100%" height="100%" fill="${escapeXml(background)}"/><foreignObject x="${number(-originX)}" y="${number(-originY)}" width="${number(textWidth)}" height="${number(textHeight)}">${html}</foreignObject>${ink}</svg>`;
+        const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${number(pageWidth)}" height="${number(pageHeight)}" viewBox="0 0 ${number(pageWidth)} ${number(pageHeight)}"><title>Handwriting snapshot</title>${metadata}<rect width="100%" height="100%" fill="${escapeXml(background)}"/><foreignObject x="${number(-originX)}" y="${number(-originY)}" width="${number(textWidth)}" height="${number(textHeight)}">${html}</foreignObject>${ink}</svg>`;
         return{svg,generation};
       }finally{
         try{component?.unload?.()}catch{}

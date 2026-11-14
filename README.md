@@ -21,6 +21,7 @@ This release includes:
 - Snapshot cleanup is safe when note opening, background reconciliation, and note deletion overlap. Existing deletion markers are reused, and notes without handwriting are not rewritten.
 - Infinite canvas is enabled by default. On the first run after this migration, existing saved global and per-note canvas choices are reset once; later choices remain respected.
 - If a portable snapshot update fails, **Bug report: show portable snapshot error** opens a selectable report on iPad with the plugin version, diagnostic revision, failing stage, cleanup operation, affected file, publication outcome, and exception; it does not include note contents.
+- **Restore handwriting from SVG backup** creates a separate editable recovery note. Existing backups recover their visible outline geometry; new snapshots also carry the original editable stroke data. After reviewing the recovery note, **Finish handwriting recovery review** can keep it or replace only the original note's handwriting while preserving the original text.
 - On mobile, the two-finger swipe that invokes Obsidian's **Navigate back** action is disabled, so pinch zooming cannot return to the previous note. Back buttons, commands, and forward navigation remain available.
 - Toolbar active highlights and enabled/disabled states update immediately for Pen, Highlighter, Eraser, Lasso, Insert space, Pan, Keyboard mode, and selection/history actions.
 - The pen starts at 5 px whenever a new or existing Markdown note is opened; highlighter sizing and existing handwriting are unchanged.
@@ -86,6 +87,12 @@ node --check tools/verify-handwriting-zoom.cjs
 node --check tools/verify-portable-snapshot.cjs
 node --check tools/verify-portable-snapshot-retention.cjs
 node --check tools/verify-portable-snapshot-diagnostics.cjs
+node --check tools/svg-recovery-source.js
+node --check tools/svg-recovery-manager-source.js
+node --check tools/patch-svg-recovery.cjs
+node --check tools/verify-svg-recovery.cjs
+node --check tools/verify-svg-recovery-manager.cjs
+node --check tools/verify-svg-recovery-workflow.cjs
 node --check tools/swipe-back-guard-source.js
 node --check tools/patch-handwriting-gesture-lifecycle.cjs
 node --check tools/verify-handwriting-gesture-lifecycle.cjs
@@ -119,6 +126,9 @@ node tools/verify-handwriting-zoom.cjs
 node tools/verify-portable-snapshot.cjs
 node tools/verify-portable-snapshot-retention.cjs
 node tools/verify-portable-snapshot-diagnostics.cjs
+node tools/verify-svg-recovery.cjs
+node tools/verify-svg-recovery-manager.cjs
+node tools/verify-svg-recovery-workflow.cjs
 node tools/verify-handwriting-gesture-lifecycle.cjs
 node tools/verify-swipe-back-gesture.cjs
 node tools/verify-eraser-tool-restore.cjs
