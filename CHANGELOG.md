@@ -1,6 +1,13 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.7`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.8`.
+
+## 1.9.8 — 2026-11-15
+
+### Changed
+
+- Restored the separate right-aligned handwriting toolbar as the release baseline.
+- Preserved editable SVG handwriting recovery and added a regression check covering toolbar restoration and SVG recovery.
 
 ## 1.9.7 — 2026-11-13
 

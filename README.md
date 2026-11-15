@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.9.7`.
+Version `1.9.8`.
 
 This release includes:
 
