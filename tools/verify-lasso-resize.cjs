@@ -4,6 +4,7 @@ const vm = require("vm");
 const main = fs.readFileSync("main.js", "utf8");
 for (const marker of [
   "selectionHandleAt(e,t)",
+  "selectionFrameCorners(t)",
   "beginResize(e,t,n)",
   "applyResizePreview(e)",
   "commitLiveResize()",
@@ -15,11 +16,11 @@ for (const marker of [
 }
 if (main.includes("selectionHandleAt(e,t)")) {
   const method = main.slice(main.indexOf("selectionHandleAt(e,t)"), main.indexOf("selectionHandleAt(e,t)") + 500);
-  if (!method.includes('nw:{x:t.x,y:t.y}') || !method.includes('se:{x:t.x+t.width,y:t.y+t.height}')) throw new Error("Corner handle hit testing is incomplete");
+  if (!method.includes("selectionFrameCorners(t)")) throw new Error("Corner handle hit testing is not frame-aware");
 }
 if (!main.includes("cloneResizeStroke(e,n,r)")) throw new Error("Resize stroke cloning must accept exactly anchor and scale");
 if (main.includes("cloneResizeStroke(e,t,n,r)")) throw new Error("Resize stroke cloning still has the invalid four-argument signature");
-if (!main.includes("this.cloneResizeStroke(h,a?this.resizeAnchor(n,r):n,o)")) throw new Error("Resize preview is not passing the fixed anchor and scale");
+if (!main.includes("this.cloneResizeStroke(h,this.resizeAnchor(n,r),o)")) throw new Error("Resize preview is not passing the fixed anchor and scale");
 
 const bboxFor = (points, padding) => {
   const xs = points.map((point) => point.x);

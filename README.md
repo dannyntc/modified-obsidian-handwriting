@@ -4,7 +4,7 @@ An Obsidian community plugin for handwriting, highlighting, erasing, and lasso s
 
 ## Current release
 
-Version `1.9.8`.
+Version `1.10.0`.
 
 This release includes:
 
@@ -28,6 +28,8 @@ This release includes:
 - Editable handwriting preserved in the plugin's `.handwriting` sidecar storage when the plugin is re-enabled.
 - After an erase gesture ends, the selected tool automatically returns to the pen or highlighter that was active before erasing.
 - After lassoing handwriting in a Markdown note, tap inside the selection, choose **Style**, then reuse the existing Pen/Highlighter options to edit selected ink colours and thickness. Pen thickness is constrained to 3–7 px; mixed selections keep pen and highlighter changes separate, and the complete style edit is undoable as one operation.
+- After lassoing handwriting, drag the bottom-right selection handle with the pen around the selection centre to rotate it. Radial movement from that same handle continues to resize the selection; rotation and resizing each commit as one undoable operation.
+- The lasso selection frame stays oriented with rotated handwriting: its dotted border, corner handles, and rotation cue move together with the selected ink and remain available after the pen is lifted.
 - While selected ink is being styled, the zoom controls and Style popup are arranged in an adaptive vertical stack so they remain available without covering one another.
 - Live Apple Pencil fountain strokes now use incremental SVG presentation while the Pencil is down, keeping the active handwriting sharp without sacrificing the canvas fallback or frame-batched input path.
 - Active SVG handwriting now hides and restores the wet canvas and pen tile as one visibility transaction, preventing a visible style transition when the Pencil is lifted.
@@ -103,6 +105,8 @@ node --check tools/patch-eraser-tool-restore.cjs
 node --check tools/verify-eraser-tool-restore.cjs
 node --check tools/patch-pen-size.cjs
 node --check tools/patch-lasso-resize.cjs
+node --check tools/patch-lasso-rotate.cjs
+node --check tools/patch-lasso-selection-frame.cjs
 node --check tools/patch-selection-style.cjs
 node --check tools/patch-selection-layout.cjs
 node --check tools/patch-selection-overlay.cjs
@@ -134,6 +138,7 @@ node tools/verify-swipe-back-gesture.cjs
 node tools/verify-eraser-tool-restore.cjs
 node tools/verify-pen-size.cjs
 node tools/verify-lasso-resize.cjs
+node tools/verify-lasso-rotate.cjs
 node tools/verify-selection-style.cjs
 node tools/verify-selection-layout.cjs
 node tools/verify-whats-new.cjs

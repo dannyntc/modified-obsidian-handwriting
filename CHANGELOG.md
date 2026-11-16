@@ -1,6 +1,13 @@
 # Changelog
 
-This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.9.8`.
+This history reconstructs the changes made after the installed `1.4.23` bundle. The release periods are based on the preserved baseline, implementation plans/specifications, checkpoints, and verification records. The intermediate versions are historical groupings; the current distributable bundle is `1.10.0`.
+
+## 1.10.0 — 2026-11-16
+
+### Added
+
+- Added lasso rotation for selected handwriting using the bottom-right selection handle.
+- Kept the dotted selection frame, corner handles, and rotation cue oriented with rotated handwriting, including after the pen is lifted.
 
 ## 1.9.8 — 2026-11-15
 
